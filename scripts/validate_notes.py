@@ -10,6 +10,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COURSES_DIR = ROOT / "docs" / "courses"
+MKDOCS_CONFIG = ROOT / "mkdocs.yml"
+KATEX_BOOTSTRAP = ROOT / "docs" / "javascripts" / "katex.js"
 
 IMAGE_RE = re.compile(r"!\[(?P<alt>[^\]]*)\]\((?P<path>[^)]+)\)")
 TIME_RE = re.compile(
@@ -20,6 +22,36 @@ BANNED_RE = re.compile(
     r"\[cite\]|TODO|FIXME|TBD|PLACEHOLDER|\.work/|/Users/|"
     r"\[INAUDIBLE\]|file://|\]\(source/|`source/"
 )
+
+
+def validate_site_config() -> list[str]:
+    """Check the complete KaTeX stack needed for correct browser rendering."""
+    errors: list[str] = []
+    if not MKDOCS_CONFIG.is_file():
+        return ["missing mkdocs.yml"]
+
+    config = MKDOCS_CONFIG.read_text(encoding="utf-8")
+    required_config = {
+        "pymdownx.arithmatex": "Arithmatex Markdown extension",
+        "generic: true": "generic Arithmatex output",
+        "javascripts/katex.js": "local KaTeX bootstrap",
+        "katex.min.js": "KaTeX runtime",
+        "auto-render.min.js": "KaTeX auto-render extension",
+        "katex.min.css": "KaTeX stylesheet",
+    }
+    for marker, description in required_config.items():
+        if marker not in config:
+            errors.append(f"missing {description}: {marker}")
+
+    if not KATEX_BOOTSTRAP.is_file():
+        errors.append("missing docs/javascripts/katex.js")
+    else:
+        bootstrap = KATEX_BOOTSTRAP.read_text(encoding="utf-8")
+        for marker in ("document$.subscribe", "renderMathInElement"):
+            if marker not in bootstrap:
+                errors.append(f"KaTeX bootstrap missing {marker}")
+
+    return errors
 
 
 def lesson_pages() -> list[Path]:
@@ -122,6 +154,15 @@ def main() -> int:
         return 1
 
     failed = False
+    config_errors = validate_site_config()
+    if config_errors:
+        failed = True
+        print(f"FAIL {MKDOCS_CONFIG.relative_to(ROOT)}")
+        for error in config_errors:
+            print(f"  - {error}")
+    else:
+        print(f"PASS {MKDOCS_CONFIG.relative_to(ROOT)}")
+
     for page in pages:
         errors = validate_page(page)
         relative = page.relative_to(ROOT)
