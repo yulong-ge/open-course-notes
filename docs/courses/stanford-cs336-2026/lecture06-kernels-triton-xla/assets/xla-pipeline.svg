@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1320" height="460" viewBox="0 0 1320 460">
+  <defs>
+    <marker id="ax" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#475569"/>
+    </marker>
+    <style>
+      .h { font:700 27px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill:#0f172a; }
+      .t { font:20px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill:#334155; }
+      .s { font:17px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill:#475569; }
+      .box { rx:18; stroke-width:3; }
+      .arr { stroke:#475569; stroke-width:4; fill:none; marker-end:url(#ax); }
+    </style>
+  </defs>
+  <rect width="1320" height="460" fill="#f8fafc"/>
+  <text class="h" x="660" y="48" text-anchor="middle">XLA 的编译与执行位置（补充背景，非本讲视频展开内容）</text>
+
+  <rect class="box" x="35" y="125" width="220" height="135" fill="#dbeafe" stroke="#2563eb"/>
+  <text class="h" x="145" y="173" text-anchor="middle">ML Framework</text>
+  <text class="t" x="145" y="210" text-anchor="middle">JAX / TensorFlow</text>
+  <text class="s" x="145" y="238" text-anchor="middle">以及其他前端</text>
+
+  <rect class="box" x="305" y="125" width="220" height="135" fill="#ede9fe" stroke="#7c3aed"/>
+  <text class="h" x="415" y="173" text-anchor="middle">StableHLO</text>
+  <text class="t" x="415" y="210" text-anchor="middle">可移植的高层算子</text>
+  <text class="s" x="415" y="238" text-anchor="middle">add / matmul / reduce…</text>
+
+  <rect class="box" x="575" y="125" width="220" height="135" fill="#dcfce7" stroke="#16a34a"/>
+  <text class="h" x="685" y="173" text-anchor="middle">XLA HLO</text>
+  <text class="t" x="685" y="210" text-anchor="middle">图级优化与融合</text>
+  <text class="s" x="685" y="238" text-anchor="middle">面向目标后端 lowering</text>
+
+  <rect class="box" x="845" y="125" width="220" height="135" fill="#ffedd5" stroke="#ea580c"/>
+  <text class="h" x="955" y="173" text-anchor="middle">GPU Codegen</text>
+  <text class="t" x="955" y="210" text-anchor="middle">LLVM/PTX emitter</text>
+  <text class="s" x="955" y="238" text-anchor="middle">或 TritonIR emitter</text>
+
+  <rect class="box" x="1115" y="125" width="170" height="135" fill="#fee2e2" stroke="#dc2626"/>
+  <text class="h" x="1200" y="173" text-anchor="middle">Device</text>
+  <text class="t" x="1200" y="210" text-anchor="middle">GPU / CPU / TPU</text>
+  <text class="s" x="1200" y="238" text-anchor="middle">由 runtime 执行</text>
+
+  <path class="arr" d="M255 192 L295 192"/>
+  <path class="arr" d="M525 192 L565 192"/>
+  <path class="arr" d="M795 192 L835 192"/>
+  <path class="arr" d="M1065 192 L1105 192"/>
+
+  <rect x="412" y="326" width="496" height="78" rx="18" fill="#f1f5f9" stroke="#64748b" stroke-width="2"/>
+  <text class="h" x="660" y="359" text-anchor="middle">PJRT：framework 与编译后 device executable 的统一接口</text>
+  <text class="s" x="660" y="388" text-anchor="middle">负责 buffer、device 与 executable 的运行时衔接</text>
+  <path d="M1200 270 C1200 365,925 365,918 365" fill="none" stroke="#64748b" stroke-width="3" marker-end="url(#ax)"/>
+</svg>

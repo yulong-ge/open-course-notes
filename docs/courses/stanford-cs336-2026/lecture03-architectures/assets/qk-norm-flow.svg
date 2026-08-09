@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="620" viewBox="0 0 1200 620" role="img" aria-labelledby="title desc">
+  <title id="title">QK Norm 在注意力中的作用位置</title>
+  <desc id="desc">输入先经块级预归一化，再投影为 Q K V；Q 与 K 各自归一化后计算 attention logits，经过 softmax 后与 V 相乘。</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+    </marker>
+    <style>
+      .label{font:600 25px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#0f172a}
+      .small{font:500 19px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;fill:#334155}
+      .box{stroke:#334155;stroke-width:2.5;rx:18;ry:18}
+      .line{stroke:#334155;stroke-width:3;fill:none;marker-end:url(#arrow)}
+    </style>
+  </defs>
+  <rect width="1200" height="620" fill="#f8fafc"/>
+  <text x="600" y="55" text-anchor="middle" class="label" font-size="32">QK Norm：直接控制进入 attention softmax 的向量尺度</text>
+
+  <rect x="45" y="245" width="145" height="90" class="box" fill="#dbeafe"/>
+  <text x="117" y="280" text-anchor="middle" class="label">输入 x</text>
+  <text x="117" y="310" text-anchor="middle" class="small">residual stream</text>
+
+  <path d="M190 290 H245" class="line"/>
+  <rect x="245" y="245" width="150" height="90" class="box" fill="#cffafe"/>
+  <text x="320" y="280" text-anchor="middle" class="label">Pre-Norm</text>
+  <text x="320" y="310" text-anchor="middle" class="small">块级 LN/RMS</text>
+
+  <path d="M395 290 H455" class="line"/>
+  <circle cx="465" cy="290" r="9" fill="#334155"/>
+  <path d="M465 290 V150 H515" class="line"/>
+  <path d="M465 290 H515" class="line"/>
+  <path d="M465 290 V430 H515" class="line"/>
+
+  <rect x="515" y="105" width="130" height="82" class="box" fill="#fee2e2"/>
+  <text x="580" y="155" text-anchor="middle" class="label">Q 投影</text>
+  <rect x="515" y="249" width="130" height="82" class="box" fill="#fef3c7"/>
+  <text x="580" y="299" text-anchor="middle" class="label">K 投影</text>
+  <rect x="515" y="389" width="130" height="82" class="box" fill="#dcfce7"/>
+  <text x="580" y="439" text-anchor="middle" class="label">V 投影</text>
+
+  <path d="M645 146 H700" class="line"/>
+  <path d="M645 290 H700" class="line"/>
+  <rect x="700" y="105" width="155" height="82" class="box" fill="#fce7f3"/>
+  <text x="777" y="140" text-anchor="middle" class="label">Q Norm</text>
+  <text x="777" y="168" text-anchor="middle" class="small">per head</text>
+  <rect x="700" y="249" width="155" height="82" class="box" fill="#fce7f3"/>
+  <text x="777" y="284" text-anchor="middle" class="label">K Norm</text>
+  <text x="777" y="312" text-anchor="middle" class="small">per head</text>
+
+  <path d="M855 146 H900 V235" class="line"/>
+  <path d="M855 290 H900 V255" class="line"/>
+  <rect x="900" y="205" width="175" height="90" class="box" fill="#ede9fe"/>
+  <text x="987" y="240" text-anchor="middle" class="label">QKᵀ / √dₕ</text>
+  <text x="987" y="270" text-anchor="middle" class="small">attention logits</text>
+
+  <path d="M987 295 V355" class="line"/>
+  <rect x="900" y="355" width="175" height="80" class="box" fill="#e0e7ff"/>
+  <text x="987" y="405" text-anchor="middle" class="label">Softmax</text>
+
+  <path d="M645 430 H860 V470 H900" class="line"/>
+  <path d="M987 435 V470" class="line"/>
+  <rect x="900" y="470" width="175" height="80" class="box" fill="#d1fae5"/>
+  <text x="987" y="505" text-anchor="middle" class="label">A · V</text>
+  <text x="987" y="533" text-anchor="middle" class="small">attention output</text>
+
+  <rect x="675" y="75" width="210" height="285" rx="26" ry="26" fill="none" stroke="#db2777" stroke-width="4" stroke-dasharray="10 8"/>
+  <text x="780" y="390" text-anchor="middle" class="small" fill="#be185d">额外的 QK Norm，不等于左侧块级 Pre-Norm</text>
+</svg>

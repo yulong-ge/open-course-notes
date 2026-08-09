@@ -1,0 +1,127 @@
+site_name: Open Course Notes
+site_description: 面向中文学习者的高质量公开课程讲义库
+site_author: Yulong Ge
+site_url: https://yulong-ge.github.io/open-course-notes/
+repo_name: yulong-ge/open-course-notes
+repo_url: https://github.com/yulong-ge/open-course-notes
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  language: zh
+  font: false
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: blue
+      toggle:
+        icon: material/weather-night
+        name: 切换到深色模式
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: light-blue
+      toggle:
+        icon: material/weather-sunny
+        name: 切换到浅色模式
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.path
+    - navigation.top
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+nav:
+  - 首页: index.md
+  - 课程:
+      - Stanford CS336 2026:
+          - 课程总览: courses/stanford-cs336-2026/index.md
+          - 01 · Overview & Tokenization: courses/stanford-cs336-2026/lecture01-overview-tokenization/index.md
+          - 02 · PyTorch & Einops: courses/stanford-cs336-2026/lecture02-pytorch-einops/index.md
+          - 03 · Architectures: courses/stanford-cs336-2026/lecture03-architectures/index.md
+          - 04 · Attention Alternatives: courses/stanford-cs336-2026/lecture04-attention-alternatives/index.md
+          - 05 · GPUs & TPUs: courses/stanford-cs336-2026/lecture05-gpus-tpus/index.md
+          - 06 · Kernels, Triton & XLA: courses/stanford-cs336-2026/lecture06-kernels-triton-xla/index.md
+          - 07 · Parallelism I: courses/stanford-cs336-2026/lecture07-parallelism/index.md
+          - 08 · Parallelism II: courses/stanford-cs336-2026/lecture08-parallelism/index.md
+          - 09 · Scaling Laws I: courses/stanford-cs336-2026/lecture09-scaling-laws/index.md
+          - 10 · Inference: courses/stanford-cs336-2026/lecture10-inference/index.md
+          - 11 · Scaling Laws II: courses/stanford-cs336-2026/lecture11-scaling-laws/index.md
+          - 12 · Evaluation: courses/stanford-cs336-2026/lecture12-evaluation/index.md
+          - 13 · Data Sources & Datasets: courses/stanford-cs336-2026/lecture13-data-sources-datasets/index.md
+          - 14 · Data Processing & Mixtures: courses/stanford-cs336-2026/lecture14-data/index.md
+          - 15 · Mid/Post-Training: courses/stanford-cs336-2026/lecture15-mid-post-training/index.md
+          - 16 · RLVR: courses/stanford-cs336-2026/lecture16-rlvr/index.md
+          - 17 · Alignment & Multimodality: courses/stanford-cs336-2026/lecture17-alignment-multimodality/index.md
+          - Guest · Dan Fu: courses/stanford-cs336-2026/guest-lecture-dan-fu/index.md
+          - 教学质量审查: courses/stanford-cs336-2026/quality-review.md
+  - 关于:
+      - 项目说明: about.md
+      - 参与贡献: contributing.md
+      - 许可与权利: licensing.md
+
+plugins:
+  - search:
+      lang:
+        - zh
+        - en
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+extra_css:
+  - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/katex.js
+  - https://unpkg.com/katex@0/dist/katex.min.js
+  - https://unpkg.com/katex@0/dist/contrib/auto-render.min.js
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/yulong-ge/open-course-notes
+      name: GitHub repository
+
+copyright: Copyright © 2026 Yulong Ge · 讲义文字采用 CC BY-NC-SA 4.0，第三方材料除外
+
+strict: true

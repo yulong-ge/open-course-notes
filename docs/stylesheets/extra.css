@@ -1,0 +1,77 @@
+:root {
+  --ocn-card-border: color-mix(in srgb, var(--md-default-fg-color) 16%, transparent);
+  --ocn-card-bg: color-mix(in srgb, var(--md-primary-fg-color) 5%, transparent);
+}
+
+.md-grid {
+  max-width: 1500px;
+}
+
+.md-typeset {
+  font-size: 0.78rem;
+  line-height: 1.75;
+}
+
+.md-typeset h1 {
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.md-typeset h2 {
+  font-weight: 680;
+}
+
+.md-typeset img {
+  display: block;
+  max-height: 46rem;
+  margin: 1.25rem auto 0.55rem;
+  border: 1px solid var(--ocn-card-border);
+  border-radius: 0.45rem;
+  box-shadow: 0 0.4rem 1.2rem rgba(0, 0, 0, 0.08);
+}
+
+.md-typeset img + em {
+  display: block;
+  color: var(--md-default-fg-color--light);
+  font-size: 0.7rem;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.course-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.course-card {
+  padding: 1.2rem 1.35rem 1.35rem;
+  border: 1px solid var(--ocn-card-border);
+  border-radius: 0.7rem;
+  background: var(--ocn-card-bg);
+}
+
+.course-card h2 {
+  margin-top: 0;
+}
+
+.md-typeset table:not([class]) {
+  font-size: 0.72rem;
+}
+
+.arithmatex {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+@media screen and (max-width: 44.984375em) {
+  .md-typeset {
+    font-size: 0.75rem;
+  }
+
+  .course-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

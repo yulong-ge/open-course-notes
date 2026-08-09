@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="360" viewBox="0 0 1200 360">
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#475569"/>
+    </marker>
+    <style>
+      .box { rx: 20; stroke-width: 3; }
+      .title { font: 700 26px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill: #0f172a; }
+      .body { font: 20px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; fill: #334155; }
+      .arrow { stroke: #475569; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+    </style>
+  </defs>
+  <rect width="1200" height="360" fill="#f8fafc"/>
+  <rect class="box" x="45" y="105" width="245" height="130" fill="#dbeafe" stroke="#2563eb"/>
+  <text class="title" x="168" y="154" text-anchor="middle">Benchmark</text>
+  <text class="body" x="168" y="190" text-anchor="middle">整体要多久？</text>
+  <text class="body" x="168" y="219" text-anchor="middle">怎样随规模变化？</text>
+
+  <rect class="box" x="340" y="105" width="245" height="130" fill="#ede9fe" stroke="#7c3aed"/>
+  <text class="title" x="463" y="154" text-anchor="middle">Profile</text>
+  <text class="body" x="463" y="190" text-anchor="middle">实际跑了哪些 kernel？</text>
+  <text class="body" x="463" y="219" text-anchor="middle">时间花在哪里？</text>
+
+  <rect class="box" x="635" y="105" width="245" height="130" fill="#dcfce7" stroke="#16a34a"/>
+  <text class="title" x="758" y="154" text-anchor="middle">Change</text>
+  <text class="body" x="758" y="190" text-anchor="middle">融合、分块、改 grid</text>
+  <text class="body" x="758" y="219" text-anchor="middle">或改写 Triton kernel</text>
+
+  <rect class="box" x="930" y="105" width="225" height="130" fill="#ffedd5" stroke="#ea580c"/>
+  <text class="title" x="1043" y="154" text-anchor="middle">Verify</text>
+  <text class="body" x="1043" y="190" text-anchor="middle">先验正确性</text>
+  <text class="body" x="1043" y="219" text-anchor="middle">再重新测量</text>
+
+  <path class="arrow" d="M290 170 L330 170"/>
+  <path class="arrow" d="M585 170 L625 170"/>
+  <path class="arrow" d="M880 170 L920 170"/>
+  <path class="arrow" d="M1043 245 C1043 325,168 325,168 245"/>
+  <text class="body" x="600" y="316" text-anchor="middle">优化是可验证的循环，而不是一次性的猜测</text>
+</svg>

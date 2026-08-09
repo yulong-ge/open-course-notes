@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="660" viewBox="0 0 1200 660">
+  <rect width="1200" height="660" fill="#fbfbf8"/>
+  <style>
+    .title { font: 700 32px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #17202a; }
+    .subtitle { font: 500 21px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #34495e; }
+    .label { font: 600 21px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #253746; }
+    .small { font: 500 18px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; fill: #455a64; }
+    .cell { stroke: #52606d; stroke-width: 2; rx: 10; }
+  </style>
+
+  <text x="50" y="54" class="title">Micro-batch 如何减少 pipeline bubble</text>
+  <text x="50" y="88" class="subtitle">理想化条件：2 个等耗时 stage，只考虑 forward，忽略通信时间</text>
+
+  <text x="50" y="148" class="label">不切 micro-batch（M = 1）</text>
+  <text x="235" y="187" class="small">时间槽 1</text>
+  <text x="455" y="187" class="small">时间槽 2</text>
+  <text x="50" y="239" class="label">Stage 0</text>
+  <text x="50" y="313" class="label">Stage 1</text>
+  <rect x="210" y="205" width="200" height="58" class="cell" fill="#5dade2"/>
+  <text x="282" y="242" class="label" fill="#ffffff">Batch</text>
+  <rect x="430" y="205" width="200" height="58" class="cell" fill="#e5e7e9"/>
+  <text x="490" y="242" class="small">空泡</text>
+  <rect x="210" y="279" width="200" height="58" class="cell" fill="#e5e7e9"/>
+  <text x="270" y="316" class="small">空泡</text>
+  <rect x="430" y="279" width="200" height="58" class="cell" fill="#5dade2"/>
+  <text x="502" y="316" class="label" fill="#ffffff">Batch</text>
+  <text x="690" y="275" class="subtitle">利用率 = 1 / (1 + 2 - 1) = 50%</text>
+
+  <line x1="50" y1="383" x2="1150" y2="383" stroke="#c5ccd3" stroke-width="2"/>
+
+  <text x="50" y="432" class="label">切成 4 个 micro-batch（M = 4）</text>
+  <text x="240" y="472" class="small">t1</text>
+  <text x="405" y="472" class="small">t2</text>
+  <text x="570" y="472" class="small">t3</text>
+  <text x="735" y="472" class="small">t4</text>
+  <text x="900" y="472" class="small">t5</text>
+  <text x="50" y="522" class="label">Stage 0</text>
+  <text x="50" y="594" class="label">Stage 1</text>
+
+  <g>
+    <rect x="190" y="488" width="145" height="56" class="cell" fill="#5dade2"/><text x="238" y="524" class="label" fill="#fff">MB1</text>
+    <rect x="355" y="488" width="145" height="56" class="cell" fill="#48c9b0"/><text x="403" y="524" class="label" fill="#fff">MB2</text>
+    <rect x="520" y="488" width="145" height="56" class="cell" fill="#f5b041"/><text x="568" y="524" class="label" fill="#fff">MB3</text>
+    <rect x="685" y="488" width="145" height="56" class="cell" fill="#af7ac5"/><text x="733" y="524" class="label" fill="#fff">MB4</text>
+    <rect x="850" y="488" width="145" height="56" class="cell" fill="#e5e7e9"/><text x="900" y="524" class="small">排空</text>
+
+    <rect x="190" y="560" width="145" height="56" class="cell" fill="#e5e7e9"/><text x="238" y="596" class="small">填充</text>
+    <rect x="355" y="560" width="145" height="56" class="cell" fill="#5dade2"/><text x="403" y="596" class="label" fill="#fff">MB1</text>
+    <rect x="520" y="560" width="145" height="56" class="cell" fill="#48c9b0"/><text x="568" y="596" class="label" fill="#fff">MB2</text>
+    <rect x="685" y="560" width="145" height="56" class="cell" fill="#f5b041"/><text x="733" y="596" class="label" fill="#fff">MB3</text>
+    <rect x="850" y="560" width="145" height="56" class="cell" fill="#af7ac5"/><text x="898" y="596" class="label" fill="#fff">MB4</text>
+  </g>
+
+  <text x="1015" y="520" class="small">理想利用率</text>
+  <text x="1015" y="555" class="label">η = M/(M+P−1)</text>
+  <text x="1015" y="594" class="label">= 4/5 = 80%</text>
+  <text x="50" y="646" class="small">灰色格是等待或排空；micro-batch 增多会减小空泡占比，但消息更小、调度与激活管理更复杂。</text>
+</svg>
