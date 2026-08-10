@@ -66,10 +66,6 @@ $$
 
 需要强调的是，这条曲线是在特定数据分布、特定模型族、特定拟合区间上得到的经验关系，指数 $0.048$ 并非常数真理；后续工作（如 Chinchilla 系列）给出了不同的系数与"计算最优"的模型-数据配比。但无论系数如何变化，"损失随计算量幂律下降、且指数很小"这一结构性事实稳定成立，这正是硬件效率成为一等公民的根本原因。
 
-![slide-005：背景设定——计算量带来可预测的性能提升](assets/slides/slide-005.jpg)
-
-本页是上方精选截图所在的完整课件页：图中 Kaplan 等人 Neural Scaling Laws 的损失-计算量曲线即上文 $L(C)=2.57C^{-0.048}$ 的出处，页中文字给出本讲立论——"仅靠更快的硬件、更高的利用率与更好的并行化，本身就能推动进展（至少目前如此）"。括号里的"for now"是讲者埋下的伏笔：当算法红利放缓时，系统效率就是最后的增长点。下一页将回答一个自然的问题：这些计算量在历史上是从哪里来的。
-
 ### 1.2 Dennard scaling 结束之后，性能来自协同设计
 
 ![slide-006：计算扩展的第一阶段——Dennard scaling 及其终结](assets/slides/slide-006.jpg)
@@ -90,10 +86,6 @@ $$
 ![GPU 十年吞吐增长的来源](assets/gpu-scaling.jpg)
 
 *图：性能增长来自精度、专用指令、制程与稀疏的共同作用（00:06:54--00:07:25）。图中的倍数用于建立量级直觉，不代表所有模型都可无条件获得同样加速。*
-
-![slide-007：并行扩展接棒——GPU 吞吐十年增长超 1000 倍](assets/slides/slide-007.jpg)
-
-本页引用 Bill Dally 的 HotChips 主旨报告：GPU 并行扩展在十年内把吞吐推高超过 $1000\times$（上方精选图即本页的局部分解图——数值表示约 $16\times$、专用指令约 $12.5\times$、制程约 $2.5\times$、稀疏约 $2\times$），并给出断言"没有 GPU scaling 就没有 LLM scaling"。这句话把第 1 节的两个事实扣在一起：scaling law 保证算力能兑换成模型质量，而 GPU 是目前唯一持续兑现这种算力增长的硬件路径。
 
 > [!NOTE]
 > 从本讲开始，看到"更快"应立即追问：峰值 FLOPs 变高了，还是有效带宽变高了？是相同数学运算，还是精度、稀疏度或算法已经改变？
@@ -117,10 +109,6 @@ GPU 选择后者：它把更多晶体管用于执行单元本身，让大量线�
 ![CPU 与 GPU 的设计取舍](assets/cpu-vs-gpu.jpg)
 
 *图：CPU 侧重少量复杂核心的延迟，GPU 侧重大量并行执行单元的吞吐（00:08:14--00:09:05）。"GPU 单线程慢"不妨碍它在高并行 workload 上更快。*
-
-![slide-008：CPU 与 GPU 的设计分野](assets/slides/slide-008.jpg)
-
-本页是 CPU/GPU 取舍的完整课件页：GPU 布满大量微小 ALU、分支与控制逻辑（缓存、预测）极少；CPU 为延迟优化（每个线程尽快完成），GPU 为吞吐优化（单位时间处理总量）。芯片示意图直观展示了晶体管预算分配的悬殊——GPU 几乎整块面积都是执行单元。这正是下文用 Little 定律估算延迟隐藏所需并发度的物理基础。
 
 延迟隐藏需要多少并发度？我们可以用 Little 定律做一个量级估算：要填满带宽 $B$、延迟为 $\tau$ 的内存系统，需要"在途"的字节数约为
 
@@ -148,10 +136,6 @@ GPU 从大到小可以建立如下心智模型：
 
 *图：GPU 由多个 SM 构成，SM 内再包含调度器、执行单元和局部存储（00:09:32--00:10:19）。图示是架构抽象；GA100 完整 die 的 128 个 SM 不等于所有 A100 SKU 都开放 128 个。*
 
-![slide-009：GPU 解剖（执行单元）](assets/slides/slide-009.jpg)
-
-本页从执行单元角度解剖 GPU：一块 GPU 含许多 Streaming Multiprocessor（SM），各自独立执行 block；每个 SM 内又含许多 Streaming Processor（SP），并行执行线程。两层结构对应上文心智模型的第 1、2 条——SM 是 block 的调度与资源分配单位，SP 是线程的真正执行场所。课件在讲完执行单元后紧接着先给出一页存储解剖，再进入执行模型的细节。
-
 ![slide-010：GPU 解剖（存储）](assets/slides/slide-010.jpg)
 
 本页从存储角度解剖同一颗芯片：L1 与 shared memory 在 SM 内部，L2 在 die 上，global memory 是 GPU 旁边的独立显存颗粒。页中给出的关键数字是：片上 SRAM 的造价约为 DRAM 的 100 倍，但速度快约 8 倍——贵而快、廉而慢，这正是存储层级存在的经济原因。第 2.3 节会把这一页展开为完整的容量-带宽阶梯表，此处先建立"离 SM 越近越快"的第一印象。
@@ -163,10 +147,6 @@ GPU 从大到小可以建立如下心智模型：
 ![GPU 的 grid、block 与 warp](assets/gpu-execution-model.jpg)
 
 *图：grid 被切成 blocks，blocks 调度到 SM，block 又被拆成 warps（00:14:26--00:15:21）。"所有 GPU 线程都执行同一条指令"是错误的，锁步范围是 warp。*
-
-![slide-011：GPU 执行模型——thread、block、warp](assets/slides/slide-011.jpg)
-
-本页定义执行模型的三个主角：thread 是"干活"的并行单位，所有线程执行相同指令、处理不同数据（SIMT）；block 是线程的分组，独占一个 SM 及其 shared memory；warp 是 32 个连续编号线程的集合，是硬件真正的锁步执行单位。三者的层级关系即 grid→block→warp→thread，前文"block 有 256 线程即 8 个 warp"的换算就建立在这一定义之上。
 
 这一区分解释了两个常见现象：
 
@@ -209,17 +189,9 @@ CUDA 名称还容易误导：
 
 *图：register/local 属于线程，shared 属于 block，global 属于 device（00:16:24--00:17:18）。作用域和物理位置是两个不同概念。*
 
-![slide-012：GPU 存储模型](assets/slides/slide-012.jpg)
-
-本页给出与执行模型对偶的存储模型：每个线程访问自己的寄存器与同 block 的 shared memory；跨 block 的信息交换必须经由 global memory，而那是慢速路径。这张图解释了为什么 GPU 编程的性能分水岭在"数据是否出 block"——block 内通信走片上 SRAM，block 间通信走 HBM，两者带宽相差近一个数量级。第 6 节的 tiling 正是把计算组织成"尽量不出 block"的形态。
-
 ### 2.4 TPU 不是"另一种 CUDA GPU"，而是更粗粒度的专用机器
 
 TPU 的抽象单元包括 scalar unit、vector processing unit（VPU）、matrix multiply unit（MXU）、片上 VMEM/SMEM 与 HBM。与 GPU 做概念映射时，可以把 TPU cell/TensorCore 类比成一个较大的计算域，把 VPU 看成通用向量通路，把 MXU 看成矩阵乘专用阵列。
-
-![slide-013：支线——TPU 是什么（一）](assets/slides/slide-013.jpg)
-
-本页是 TPU 支线的第一页：GPU、TPU 与多数加速器在高层抽象上相似——轻量控制、快（大）矩阵单元、快存储；差别在于 GPU 有更多 SM，TPU 有更少的 TensorCore，但矩阵乘性能相近。页中还点出两个关键差异：加速器之间如何互联（留给并行化一讲），以及 TPU 没有 warp 概念、只有 block——这换来矩阵乘路径的极致简化，代价是非矩阵乘算子的灵活性。
 
 与 GPU 的"许多小而灵活的执行单元 + 程序员显式管理 warp/block"不同，TPU 的 MXU 是一个大规模的脉动阵列（systolic array）：权重（或一侧操作数）预先流入阵列并保持 stationary，另一侧操作数像脉搏一样逐拍流过，每个处理单元只做一次乘加并把部分和传给邻居。这种设计把数据复用做到物理布线层面——部分和根本不离开阵列——但代价是它对规则的大型矩阵乘极为高效，对不规则控制流则几乎无能为力。GPU 的程序员用 tiling 在 shared memory 里"软件地"实现复用，TPU 则用硬件拓扑"物理地"实现复用，二者面对的是同一个 Roofline 约束。
 
@@ -265,10 +237,6 @@ GPU 往往提供更多细粒度、可编程执行单元，TPU 则以大规模规
 ![计算、显存与互联增长差距](assets/compute-memory-gap.jpg)
 
 *图：计算吞吐的增长速度显著超过 DRAM 与互联（00:25:31--00:26:43）。这正是低精度、fusion、tiling 与 FlashAttention 都围绕数据搬运展开的背景。*
-
-![slide-018：计算扩展快于存储扩展（memory wall）](assets/slides/slide-018.jpg)
-
-本页是 memory wall 的原始课件页（上方精选图即其局部）：FLOPs 的扩展速度持续超过显存带宽，计算单元越来越难被喂饱。页中引用的 riselab"AI and Memory Wall"一文给出了更系统的统计——硬件算力几年内翻几个数量级，而 DRAM 带宽同期只有个位数倍增长。这条发散的曲线就是第 3.2 节 Roofline 模型要形式化的对象。
 
 把这三个倍数放在一起看，可以得到一个尖锐的定量结论：如果二十年前某个算法的算术强度刚好让机器"算"与"搬"平衡，那么今天同样的算法，算力相对带宽富余了约 $60000/100=600$ 倍。换言之，**二十年间机器平衡点向"更高算术强度"方向移动了近三个数量级**，一切不能提高数据复用度的算法都在持续地变得相对更慢。这就是为什么本讲后面的每一项优化——低精度、fusion、tiling、重计算——本质上都在减少字节搬运或提高字节复用。
 
@@ -355,10 +323,6 @@ $$
 
 结论一目了然：**Transformer 里除了大矩阵乘以外，几乎所有算子都深深落在 Roofline 斜线区**。当 $I<I^*$，增加算力几乎无效，kernel memory-bound；当 $I>I^*$，继续减少内存流量的边际收益下降，kernel 更接近 compute-bound。这就是为什么大模型训练的整体吞吐往往由一堆"不起眼"的逐元素算子和归一化算子决定，而不是由矩阵乘的峰值决定。
 
-![slide-021：Roofline 模型——如何避免 memory-bound](assets/slides/slide-021.jpg)
-
-本页正式进入 Roofline：对数坐标图上，横轴算术强度、纵轴可达性能，斜线段受带宽约束、水平段受峰值算力约束（上方精选图即本页图示）。页末的点题之句是"如何避免 memory-bound"，这正是 ridge point $I^*=P_{\text{peak}}/B_{\text{mem}}$ 的工程读法：要么提高 $I$（第 6 节 tiling），要么减少字节 $M$（第 4、5 节的低精度、fusion、重计算），要么同时做（第 7 节 FlashAttention）。
-
 ![Roofline 模型](assets/roofline.jpg)
 
 *图：斜线区域由带宽限制，水平区域由峰值计算限制（00:31:11--00:32:36）。Roofline 是上界模型，实际性能还受调度、依赖、occupancy、指令混合等因素影响。*
@@ -419,10 +383,6 @@ print(f"时间 {ms:.3f} ms，有效带宽 {bytes_moved / (ms * 1e-3) / 1e12:.2f}
 
 *图：同一 warp 中条件不同的线程会让分支路径被掩码串行执行（00:33:05--00:34:21）。条件语句本身并非必然慢；如果同一 warp 的判断一致，就没有这类分歧。*
 
-![slide-023：控制分歧（非访存问题）](assets/slides/slide-023.jpg)
-
-本页给出分歧的机制定义：SIMT 模型下同一 warp 的每个线程执行相同指令；条件语句本身合法，但会在执行模型层面引入显著开销——即上文 $T_{\text{div}}=\sum_i t_i$ 的串行化代价。图中被掩码的 lane 形象展示了"空转"：路径 A 执行时走 B 的 lane 闲置，反之亦然，两条路径的指令槽一个都省不掉。
-
 我们可以给分歧一个简单的代价模型。设一个 warp 内的线程按条件分成 $p$ 条路径，路径 $i$ 上有 $w_i$ 个 lane（$\sum_i w_i=32$）、路径 $i$ 的指令代价为 $t_i$。由于没有分歧时 warp 可以在 $\max_i t_i$ 时间内并行执行任意一条路径，而分歧后硬件必须**串行发射每条路径**，总时间为
 
 $$
@@ -471,10 +431,6 @@ $$
 ![ReLU 与精度的访存量](assets/relu-precision-intensity.jpg)
 
 *图：课件用 FP32 与 FP16 的每元素字节数说明低精度减轻带宽压力（00:35:38--00:36:16）。幻灯片写成"8 byte/FLOP、4 byte/FLOP"，那是标准 arithmetic intensity 的倒数，不能与 FLOP/byte 混用。*
-
-![slide-025：低精度提高算术强度（ReLU 例）](assets/slides/slide-025.jpg)
-
-本页是 ReLU 算术强度例子的原始课件页，请特别注意其口径：幻灯片写的是 FP32"8 bytes/FLOP"与 FP16"4 bytes/FLOP"，即每 FLOP 搬运的字节数，是本讲义所用 FLOP/byte 的倒数。口径取倒数不影响结论——FP16 把每单位计算的搬运量减半，对 memory-bound 算子就近似把时间减半——但若混淆两种口径，ridge point 的位置判断会完全弄反，读书时务必留意。
 
 低精度的第二笔收益来自计算侧：更小的数值格式意味着更小的乘法器面积，同样的硅片可以塞入更多乘加单元，峰值 FLOP/s 随之上升。以 H100 SXM 的稠密峰值为例，精度每降一档，峰值大约翻一倍：
 
@@ -550,10 +506,6 @@ MXFP8 改用分块缩放：课件采用每 32 个 E4M3 值共享一个 E8M0 scal
 
 *图：前向、输入梯度和权重梯度可在不同方向量化，主权重仍保留高精度（00:42:08--00:42:40）。图中分块只是数据流示意；MXFP8 规范是每 32 个值一个 scale。*
 
-![slide-028：MXFP8 训练实况](assets/slides/slide-028.jpg)
-
-本页是 MXFP8 训练的实测数据流（引自 arXiv 2506.08027）：前向、输入梯度、权重梯度三个方向分别量化，主权重保持高精度，且转置副本单独量化存储。两个细节值得记住："not all weights in MXFP8"——敏感路径保留高精度是标配而非例外；"transposes also separately quantized"——布局元数据已成为格式选择的一部分。这正应了上文的论断：数值格式会反过来约束数据布局与 kernel 结构。
-
 二维矩阵若按连续 32 个值分组，转置后分组边界会改变。高性能实现可能为两个访问方向保存不同量化布局，而不是在关键路径上临时转置和重新求 scale。这是低精度工程里一个反复出现的主题：**数值格式从来不是孤立选择，它会反过来约束数据布局与 kernel 结构。**
 
 ### 4.3 MXFP4 更激进，也更依赖训练配方
@@ -569,10 +521,6 @@ $$
 ![MXFP4 的可表示值](assets/mxfp4-values.jpg)
 
 *图：MXFP4 用有限离散值加局部 scale 覆盖数据范围（00:43:15--00:44:20）。讲者此处是在讨论前沿训练趋势；不能据此断言所有训练系统已普遍使用 FP4。*
-
-![slide-029：MXFP4 的全部可表示值](assets/slides/slide-029.jpg)
-
-本页把 MXFP4 的全部可表示值摆上台面——"这就是你能表示的所有值！"：$\{0,\pm0.5,\pm1,\pm1.5,\pm2,\pm3,\pm4,\pm6\}$，每 16 个值共享一个 E4M3 scale。看着这 16 个离散点，读者应能直观理解 4-bit 训练为什么"更依赖训练配方"：任何落在这 16 个点之外的数值都要付出舍入或溢出代价，scale 的选择直接决定哪一段值域被优先保护。
 
 低精度为什么未必带来理论上的 $2\times$：
 
@@ -619,10 +567,6 @@ $$
 
 本页把例子坐实：计算 $\sin^2x+\cos^2x$ 的朴素实现会启动 5 个 CUDA kernel（sin、平方、cos、平方、相加），每个 kernel 都读写一遍 global memory。注意这 5 个 kernel 的数学都平凡至极——没有一个值得单独占用一次 HBM 往返，这正是逐元素链最浪费的形态。
 
-![slide-033：融合示例——五个点算子合一](assets/slides/slide-033.jpg)
-
-本页给出答案：5 个逐元素操作可以融合成一次 CUDA kernel 调用，且这类"容易"的融合 `torch.compile` 等编译器可以自动完成。需要限定的是"这类"：逐元素、无跨元素依赖的子图才可自动融合；一旦涉及归约、矩阵乘或动态 shape，仍需手工 kernel 或更专门的编译策略。
-
 我们把这笔账数清楚。对含 $n$ 个元素的 FP16 张量（每元素 2 bytes），朴素执行各 kernel 的 HBM 读写为：
 
 | kernel | 读（bytes） | 写（bytes） |
@@ -660,10 +604,6 @@ Fusion 的收益来自两部分：减少 launch latency，减少中间张量的 
 
 *图：保存三个 sigmoid 中间结果时，前后向合计示意为 8 次 global-memory access（00:50:50--00:51:36）。这是教学计数，不含 cache、融合和实际反向 kernel 的全部流量。*
 
-![slide-035：保存激活的代价（三个 sigmoid，8 次访问）](assets/slides/slide-035.jpg)
-
-本页把三个 sigmoid 叠加的玩具链画成存储账本：全保存方案前后向合计 8 次显存读写，算术强度极低，"对性能来说非常糟糕"。sigmoid 是精心挑选的例子——它计算便宜（一次取负、一次 exp、一次除法）、输出与输入同尺寸，是"保存成本高、重算成本低"的极端样本，因此最能凸显重计算的价值。
-
 只保存端点并在反向重算：前向 1 次读、1 次写，反向 2 次读、1 次写，共 5 次；教学示例的访问量变为：
 
 $$
@@ -675,10 +615,6 @@ $$
 ![重计算后的访问计数](assets/recomputation.jpg)
 
 *图：重计算把玩具示例的 8 次访问降为 5 次，以额外 sigmoid 计算换取 37.5% 的访问减少（00:51:38--00:52:39）。该比例不是任意网络的通用节省率。*
-
-![slide-036：扔掉激活、反向重算（5/8 访问量）](assets/slides/slide-036.jpg)
-
-本页给出对策：扔掉中间激活，反向时重算——访问量降到原来的 $5/8$。页中引用的 PyTorch dev-discuss 帖子值得一提：其标题是"min-cut optimal recomputation"，即把"存哪些激活"形式化为网络流上的最小割问题，AOTAutograd 可以自动求解最优 checkpoint 集合。教学玩具里的"全扔"只是最优解的一个特例。
 
 为什么这笔交易划算？回到 Roofline：逐元素激活函数（sigmoid、GELU、dropout）的算术强度在 $1$ FLOP/byte 量级，而 H100 的 ridge point 约 $295$——这些算子的重算几乎"免费"，因为计算单元本来就闲着；省下的却是真金白银的 HBM 带宽与容量。反向传播恰好站在相反的位置：它是整个训练流程中 HBM 流量最密集的环节之一。
 
@@ -704,10 +640,6 @@ DRAM 不是按单个标量随取随到，而是以对齐的 burst/transaction �
 ![合并访存与 burst](assets/memory-coalescing.jpg)
 
 *图：连续地址可以合并进较少 burst，离散地址需要更多内存事务（00:54:14--00:55:02）。图中的 128-byte burst 是教学示意；真实事务受架构、cache line 与访问宽度影响。*
-
-![slide-038：合并访存的判定](assets/slides/slide-038.jpg)
-
-本页给出 coalescing 的判定定义：若同一 warp 的所有线程访问落在同一 burst 内，访存即被合并。页中再次提醒 warp 的定义——32 个连续编号、共同执行的线程——因为合并的判定单位是 warp 的一条访存指令，而不是单线程的地址序列。把这个定义与上文的 stride 模型对照：合并与否完全由"同一条 load 指令下 32 个 lane 的地址集合"决定。
 
 把数量关系写清楚：一个 warp 的 32 个 lane 各读一个 4-byte 字，若地址连续且对齐，总共 $32\times4=128$ bytes，恰好落入一个 128-byte 事务，带宽利用率 $100\%$；若地址以 stride $s$（以字为单位）跳跃，则 32 次访问散落在 $32$ 个不同的事务中，每个事务实际只用到 $4$ bytes，有效带宽降为 $1/\min(s,32)$ 量级。注意代价来自"搬了用不到的字节"，而不是"发了更多指令"——指令数完全一样，是内存系统为每个请求搬回了整段数据。
 
@@ -738,10 +670,6 @@ $$
 ![矩阵乘的分块阶段](assets/tiling-phases.jpg)
 
 *图：block 分阶段载入输入 tiles 到 shared memory，并为输出 tile 累积部分和（00:59:29--01:00:17）。图中文字中的个别 tile 下标只是示意，核心是沿归约维反复载入对应块。*
-
-![slide-041：tiling——shared memory 中的存储与复用](assets/slides/slide-041.jpg)
-
-本页给出 tiled 矩阵乘的分阶段流程：阶段一载入 $M_{0,0}$ 与 $N_{0,0}$ 块到 shared memory，阶段二为 $P$ 累加部分和，阶段三载入下一块……直到归约维走完。页末总结的双重收益值得划重点：重复读取改为访问 shared memory（省流量），且全局访存可以被合并（省事务）——tiling 同时修复了上一节的两个病灶。
 
 现在推导 tiling 的 HBM 流量。设 $C=AB$，$A\in\mathbb{R}^{M\times K}$，$B\in\mathbb{R}^{K\times N}$，总计算量
 
@@ -779,10 +707,6 @@ $$
 
 *图：tile 内共享数据使输入从 global memory 的读取次数由约 $N$ 降至 $N/T$（01:00:19--01:00:58）。这是忽略 cache、边界、写回和双缓冲的理想模型。*
 
-![slide-042：tiling 的复用数学](assets/slides/slide-042.jpg)
-
-本页是 tiling 复用的定量结论：非分块矩阵乘中每个输入从 global memory 读 $N$ 次；分块后每个输入只从 global memory 读 $N/T$ 次、在 tile 内被复用 $T$ 次——global memory 流量降低 $T$ 倍。这正是上文 $Q_{\text{tile}}=MNK(1/b_M+1/b_N)+MN$ 在方阵、方 tile 下的特例。也把第 2.1 节"在途字节"的估算与这里的复用次数联系起来：复用度越高，同样带宽能喂饱的算力越大。
-
 代入数值验证。$M=N=K=4096$，FP16（2 bytes/element），$T=128$：
 
 $$
@@ -811,19 +735,11 @@ tile 不能无限变大：shared memory 容量（每 SM 约 228 KB）、寄存�
 
 *图：矩阵维度不能整除 tile 时，少量有效元素可能触发整个边界 block（01:02:35--01:03:31）。实际库会选择多种 kernel，图示只解释一种量化效应。*
 
-![slide-043：tiling 的复杂因素（一）——可整除性](assets/slides/slide-043.jpg)
-
-本页指出 tiling 的现实约束：tile 尺寸未必整除矩阵尺寸，从而造成低利用率（图中的边界块）；并列出决定 tile 尺寸的三要素——合并访存、shared memory 容量、矩阵维度可整除性。三者分别对应本讲的三个层面：内存系统（§6.1）、硬件资源（§2.3）、调度几何（本节）。tile 尺寸从来不是单一变量的优化，而是三重约束下的折中。
-
 Padding 让 leading dimension 与 burst、tile 或 Tensor Core 约束更匹配，有时即使增加计算也会加速。需要指出，padding 的收益有两个来源：其一是消除上面这种 tile 边界浪费；其二是让内存布局对齐到事务粒度，避免一次连续访问被拆成两个 burst。两者经常同时出现，但机制不同。
 
 ![对齐与未对齐的内存布局](assets/memory-alignment.jpg)
 
 *图：对齐 tile 可用较少 burst，未对齐边界可能拆成多个低效事务（01:04:04--01:05:11）。对齐要求取决于数据类型和 kernel，不存在普适"所有维度都补到 2 的幂"。*
-
-![slide-044：tiling 的复杂因素（二）——内存对齐](assets/slides/slide-044.jpg)
-
-本页把对齐问题说透：内存按 burst 供给，只有当 burst 与矩阵的行边界对齐时，载入 tile 才是高效的；某些矩阵维度下合并访问根本不可能——只能 padding。这为下面 nanoGPT 词表补到 64 倍数的案例提供了机制解释：padding 不是"洁癖"，而是在无法改变线程映射时，改变数据布局以迁就 burst 几何的最后手段。
 
 nanoGPT 的著名例子把词表从 50257 padding 到 50304，即最近的 64 倍数。虽然多算了无用 logits，却进入更高效的 kernel 路径，在该实验中约加速 25%。
 
@@ -835,10 +751,6 @@ nanoGPT 的著名例子把词表从 50257 padding 到 50304，即最近的 64 �
 
 ### 6.4 为什么 matmul 吞吐曲线呈锯齿
 
-![slide-045：综合——矩阵乘吞吐之谜](assets/slides/slide-045.jpg)
-
-本页把前五个技巧汇总成一道综合题：实测的方阵乘吞吐随尺寸呈带状锯齿上升——"为什么矩阵越大反而（单位算力）越快？"。素材来自 thonking.ai 的矩阵 shape 研究（第 2 页预支过的那篇文章）。注意横轴是连续尺寸、曲线却不连续——这说明性能的决定因素不止 FLOPs，还有尺寸与硬件几何的相互作用。
-
 方阵尺寸增加时，理论 FLOPs 平滑增长，但实测 TFLOP/s 出现多条带状与周期性骤降。现在可以把现象拆成三层：
 
 1. 小矩阵算术强度低，启动和搬运占比高；
@@ -848,10 +760,6 @@ nanoGPT 的著名例子把词表从 50257 padding 到 50304，即最近的 64 �
 ![矩阵乘吞吐之谜](assets/matrix-mystery.jpg)
 
 *图：性能曲线同时呈现算术强度、tiling/alignment 与 wave quantization 的影响（01:06:16--01:06:40）。横轴增大不保证每个相邻尺寸都更快。*
-
-![slide-046：矩阵之谜特写](assets/slides/slide-046.jpg)
-
-本页是矩阵之谜的特写：我们已经理解了一部分成因——小尺寸算术强度低（Roofline 斜线区）、tile 对齐与否（§6.3）——但带内的周期性抖动仍未解释。讲者把剩余部分拆成两块：tiling 的对齐效应与 wave quantization，接下来两页分别处理。
 
 ![slide-047：谜底第一部分——tiling 与对齐](assets/slides/slide-047.jpg)
 
@@ -894,10 +802,6 @@ $$
 ![Wave quantization](assets/wave-quantization.jpg)
 
 *图：1792 到 1793 的矩阵维度变化使 tile 数从 98 跳到 120，超过 108 个 SM 的单 wave 容量（01:07:42--01:09:20）。讲者口头曾说"tile size 加一"，准确说法是矩阵维度加一。真实并发还取决于每 SM 可驻留 block 数与资源。*
-
-![slide-048：谜底第二部分——wave quantization](assets/slides/slide-048.jpg)
-
-本页给出第二部分答案——周期性来自 wave quantization，并用 $1792\to1793$ 的实例演算：tile $256\times128$ 时，$\lceil1792/256\rceil\times\lceil1792/128\rceil=7\times14=98$ 个 tile，A100 的 108 个 SM 一波跑完；边长加一变为 $8\times15=120$ 个 tile，需要第二波而第二波只有 12 个 tile 在工作。一个元素的尺寸变化让调度从"一波不满"跳到"两波空闲"，锯齿的每个深谷背后都是一次这样的取整跳变。
 
 > [!IMPORTANT]
 > 这也解释了为什么性能调优不能只看 FLOPs。shape 改变可能切换 kernel、tile、对齐、wave 数与 occupancy；基准必须使用真实 batch、sequence、hidden size 和精度。
@@ -957,10 +861,6 @@ $$
 ![FlashAttention 的 KQV 分块](assets/flashattention-tiling.jpg)
 
 *图：Q、K、V 块从 HBM 复制到 SRAM，在片上计算注意力块并写回输出（01:13:30--01:14:07）。左侧带宽/容量数字是特定硬件的示意，重要的是 SRAM 小而快、HBM 大而慢。*
-
-![slide-052：tiling 第一块——KQV 矩阵乘的分块](assets/slides/slide-052.jpg)
-
-本页点破一个许多人初读论文时的误解：FlashAttention 论文的图 1"字面上就是 KQV 矩阵乘的 tiling"——分块、载入 SRAM、片上计算、写回，全部是第 6.2 节的套路。真正的难点在页末的追问里："可是 softmax 怎么办？"矩阵乘可以逐块累加，softmax 的分母却依赖整行——这正是下一页在线 softmax 要拆除的路障。
 
 设 $Q$ 按行分成块大小 $B_r$ 的 tile，$K,V$ 按行分成块大小 $B_c$ 的 tile。处理一对 tile 时，片上需要驻留 $Q$ 块（$B_r\times d$）、$K$ 块与 $V$ 块（各 $B_c\times d$）、分数块（$B_r\times B_c$）以及若干统计量，SRAM 预算约束为
 
@@ -1023,10 +923,6 @@ $$
 ![普通 softmax 与在线 softmax](assets/online-softmax.jpg)
 
 *图：在线 normalizer 同时更新最大值与分母，使 softmax 可逐 tile 计算（01:14:07--01:15:37）。softmax 是逐行跨 key 归一化，不是对整个 $N\times N$ 矩阵共用一个分母。*
-
-![slide-053：tiling 第二块——softmax 的增量计算](assets/slides/slide-053.jpg)
-
-本页给出在线 softmax 的出处与对照：源自 Milakov 与 Gimelshein 2018 的工作，左列普通 softmax 需要两遍扫描（先最大值再归一化），右列在线版本单遍维护 $(m,d)$——"增量更新最大值，构造 telescoping 求和"。telescoping 一词值得玩味：每一步都把旧的部分和"折算"到新基准上，像望远镜筒一样逐节伸缩。上面的归纳证明就是把这种伸缩严格化。
 
 下面的 PyTorch 代码验证逐元素在线 softmax 与标准稳定 softmax 的数值等价：
 
@@ -1109,10 +1005,6 @@ $$
 ![FlashAttention 前向过程](assets/flashattention-forward.jpg)
 
 *图：分数与指数块在 SRAM 中产生，不物化到 HBM；累计分母变化时在线重标旧输出（01:15:37--01:17:03）。反向同样按 tile 重计算必要中间量，避免保存完整 $N^2$ 矩阵。*
-
-![slide-054：组装完成——FlashAttention 前向](assets/slides/slide-054.jpg)
-
-本页把前向过程完整组装（引自 Dao 2023）：逐 tile 计算内积 $S$、融合指数算子、用在线 telescoping 求和逐 tile 完成 softmax——三项技术分别对应第 6.2、5.1、7.3 节。页末括号还交代了反向："本讲不展开，但他们是逐 tile 重算的"——即第 5.2 节 recomputation 在 attention 内部的应用。至此回看，FlashAttention 的每个零件都在本讲出现过。
 
 ### 7.5 为什么"做更多 FLOPs"仍然更快
 

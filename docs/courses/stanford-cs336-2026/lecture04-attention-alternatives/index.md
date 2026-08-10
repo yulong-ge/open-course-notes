@@ -141,10 +141,6 @@ $$
 
 *图：上下文窗口与 attention/FFN 成本的增长趋势。官方课件第 2 页；视频对应讲解区间：`00:01:35--00:02:49`。*
 
-![slide-002：上下文长度增长带来的 attention 成本](assets/slides/slide-002.jpg)
-
-本页（课件第 2 页）即上方精选图的整页原貌：随着上下文窗口拉长，attention 成本曲线相对近似线性增长的 FFN 成本急剧上翘。讲者用它立起全讲的问题意识——当上下文从数千走向数十万乃至数百万 tokens，二次项会吞噬掉其他所有计算预算，必须在算法层面而非仅在工程层面给出回应。
-
 讲者先给出两个直观基线。**局部 attention** 只看固定窗口，成本可控但可能漏掉远距离依赖；**少量全局层 + 大量局部层** 能恢复部分长程信息，却仍需要为“哪些层做全局”付出架构和系统复杂度。**FlashAttention** 则通过避免显式物化巨大 attention matrix、重排计算并减少显存搬运，能获得显著的常数项收益，却没有消除 `n²`。当目标走向数百万 tokens 时，课程因此继续追问：能否改变 attention 本身的计算形态？
 
 ![slide-003：基础工具箱——局部/全局混合与 FlashAttention 的系统优化](assets/slides/slide-003.jpg)
@@ -240,10 +236,6 @@ $$
 
 *图：从 `(QK^T)V` 改写为 `Q(K^T V)` 及两种成本。官方课件第 4 页；视频对应讲解区间：`00:05:47--00:08:04`。*
 
-![slide-004：线性 attention 的结合律改写](assets/slides/slide-004.jpg)
-
-本页（课件第 4 页）是上述推导的课件原页：上方写出一般形式 $\operatorname{Attn}(Q,K,V)=\rho(QK^\top)V$，下方对照两种结合顺序的代价——左结合须物化 $n\times n$ 的 logits 矩阵，右结合只产生 $d\times d$ 的 $K^\top V$。注意本页同样标注了前提：$\rho$ 取恒等映射时结合律才成立，这正是把 softmax 换成特征映射 $\phi$ 的动机所在。
-
 > [!WARNING]
 > 这里最关键的隐藏条件是 `ρ` 必须允许这种分解。softmax 不能直接“穿过”结合律：分母 $\sum_r\exp(z_{t,r})$ 把同一行的所有 key 位置耦合在一起，任何先压缩历史的做法都无法事后还原这个分母。因此从 softmax attention 改成纯线性 attention 是有损的架构改变，不是等价加速。
 
@@ -305,10 +297,6 @@ $$
 ![线性 attention 的循环形式](assets/recurrent-linear-attention.jpg)
 
 *图：parallel form 与 recurrent form 的精确对应。官方课件第 5 页；视频对应讲解区间：`00:08:04--00:09:49`。*
-
-![slide-005：线性 attention 的循环形式](assets/slides/slide-005.jpg)
-
-本页（课件第 5 页）给出 parallel form 与 recurrent form 的并排对照：左栏是整段序列一次矩阵乘的训练形态，右栏是逐步更新状态 $S_t$、逐步读出 $y_t$ 的推理形态。课件在此强调的核心事实与本讲义上方归纳法证明一致——这两种形态是**同一代数对象的两种计算调度**，不是两个近似程度不同的模型。
 
 这产生一个极有价值的 duality：训练时可以用并行矩阵形式吞吐整段序列（充分利用 GPU 的大矩阵乘吞吐），推理时用串行 recurrence，只维护固定大小状态——无论上下文已经多长，每生成一个 token 的计算与显存都是 $O(d_kd_v)$ 的常数。课堂问答专门澄清了两种“损失”不能混为一谈：
 
@@ -399,10 +387,6 @@ $$
 ![Mamba-2 的门控状态视角](assets/mamba2-gating.jpg)
 
 *图：从 linear attention 到带衰减门与 skip path 的 Mamba-2 简化式。官方课件第 7 页；视频对应讲解区间：`00:11:11--00:13:25`。*
-
-![slide-007：Mamba-2 的门控状态视角](assets/slides/slide-007.jpg)
-
-本页（课件第 7 页）是 Mamba-2 简化式的课件原页：在 linear attention 的 $S_t=S_{t-1}+k_tv_t^\top$ 上加入输入相关的标量衰减 $\gamma_t$ 与直接通路 $v_t^\top D$。课件特意把它写成与线性 attention 逐项对照的形式，让读者看到：Mamba 类模型的全部新意都集中在"历史以什么权重留存"这一乘法因子上，而状态形状与读取方式原封不动。
 
 > [!NOTE]
 > 这不是完整 Mamba-2 block。实际模型还包含 projection、卷积、规范化和更具体的 SSM 参数化（如对角状态矩阵、SSD 分块结构）；课程这里只保留与 linear attention 对照所需的状态更新骨架。把这个简化式当作理解入口，而不是实现蓝本。
@@ -499,10 +483,6 @@ assert torch.allclose(new_read, expected, atol=1e-5)
 
 *图：GDN 通过 `I-β_tk_tk_t^T` 擦除当前 key 方向的旧内容。官方课件第 9 页；视频对应讲解区间：`00:15:22--00:18:21`。*
 
-![slide-009：Gated Delta Net 的擦除与写入](assets/slides/slide-009.jpg)
-
-本页（课件第 9 页）是 GDN 更新式的课件原页：$S_t=\gamma_t(I-\beta_tk_tk_t^\top)S_{t-1}+\beta_tk_tv_t^\top$。课件用色块标出三项的分工——整体保留门 $\gamma_t$、沿 key 方向的擦除算子 $I-\beta_tk_tk_t^\top$、新内容的写入项 $\beta_tk_tv_t^\top$，与上方"先擦后写"的几何推导逐字对应。
-
 > [!WARNING]
 > 只有在额外归一化条件下（$\|k_t\|=1$ 且 $\beta_t=1$），`I-β_tk_tk_t^T` 才能严格解释成正交投影；一般情况下它是“收缩 $k_t$ 方向分量”的线性算子，更稳妥的说法是“沿 key 方向进行可学习擦除”。也不要把它与数值分析中的 Householder 反射混淆——反射会把分量翻转为负，而这里的算子只负责缩减。
 
@@ -569,10 +549,6 @@ $$
 
 *图：轻量 indexer 打分、top-k token selection 与精细 attention。官方课件第 12 页；视频对应讲解区间：`00:23:13--00:24:45`。*
 
-![slide-012：DeepSeek Sparse Attention 的 lightning indexer](assets/slides/slide-012.jpg)
-
-本页（课件第 12 页）是 DSA 架构的课件原页：底部每个历史 token 先经低维 indexer 投影得到 $k^I_s$，当前 token 的多头 indexer query $q^I_{t,j}$ 对全部历史打分并聚合为 $I_{t,s}$；只有 Top-k 选中的位置才进入上方完整维度的 attention 计算。图中特意用粗细与着色区分两条数据通路——indexer 通路低维、可 FP8、扫描全历史；主 attention 通路高维高精度、只触碰选中集合，正是"粗筛 + 精读"两段式结构的图示化。
-
 ### 4.2 为什么实际会快，但不应误称“严格线性”
 
 课堂追问了一个关键问题：如果 indexer 仍要看全部历史，它不还是全局扫描吗？答案是肯定的。收益来自 indexer 的常数项极小：低维 query/key、少量 heads、ReLU、FP8 等；真正昂贵的 value 聚合只发生在 `k` 个选中位置上。
@@ -625,10 +601,6 @@ Transformer 中大量参数和 FLOPs 位于 FFN。以标准的扩张四倍配置
 
 *图：稠密模型与带 selector 的 sparse expert layer。官方课件第 15 页；视频对应讲解区间：`00:35:27--00:36:57`。*
 
-![slide-015：Dense FFN 与 Sparse MoE FFN 的对照](assets/slides/slide-015.jpg)
-
-本页（课件第 15 页）是 MoE 定义的课件原页：左侧 dense 模型的每个 token 流过同一个大 FFN；右侧 sparse 模型中 FFN 被复制为 $N$ 份 expert，selector（router）为每个 token 挑出其中少数几个。图中被点亮的 expert 子集随 token 不同而不同——这正是 total parameters 与 active parameters 解耦的图示：参数表随 $N$ 线性增长，而每 token 的计算路径长度不变。
-
 例如课程引用 Qwen1.5-MoE：约 14.3B total parameters，但每个 token 只激活约 2.7B。比较模型时必须说明是哪种口径；只写一个“参数量”会产生严重误导。三个口径各自回答不同的问题：
 
 - **total parameters** 决定显存占用与存储成本；
@@ -644,10 +616,6 @@ Transformer 中大量参数和 FLOPs 位于 FFN。以标准的扩张四倍配置
 ![固定计算下增加专家的经验收益](assets/moe-scaling.jpg)
 
 *图：相近 active compute 下，更多 total parameters 带来更好训练曲线的经验结果。官方课件第 16 页；视频对应讲解区间：`00:36:57--00:38:18`。*
-
-![slide-016：固定计算下增加专家的经验收益](assets/slides/slide-016.jpg)
-
-本页（课件第 16 页）是"为什么更多未激活参数仍然有用"的原始证据图：固定每 token 的 active FLOPs，随 expert 数（即 total parameters）增加，训练 loss 曲线整体下移。这条曲线是 MoE 经济学的核心经验事实——容量与计算可以分离定价——但它没有回答"为什么"，只回答"是否存在"；对机制的解释（异质数据、专门化子网络）仍属于合理假说层面。
 
 ![slide-017：MoE 训练更快的证据——Switch 与 OLMoE](assets/slides/slide-017.jpg)
 
@@ -667,11 +635,7 @@ Transformer 中大量参数和 FLOPs 位于 FFN。以标准的扩张四倍配置
 
 *图：不同 experts 分布到设备后形成的新并行维度。官方课件第 19 页；视频对应讲解区间：`00:39:50--00:40:42`。*
 
-![slide-019：MoE 的 expert parallelism](assets/slides/slide-019.jpg)
-
-本页（课件第 19 页）把 expert 分布画成并行拓扑：不同 experts 驻留在不同设备上，tokens 按路由结果跨设备 dispatch 与 combine。课件借此点出 MoE 独有的第四个并行维度——与 data、tensor、pipeline parallelism 并列的 expert parallelism；它的收益是参数总量可以超出单卡显存，代价是多出两趟 all-to-all 通信（定量估算见第 8.1 节）。
-
-路由又带来部分反馈：一个 token 只经过被选 expert，模型无法直接观察“如果送到其他 expert 会怎样”。这很像 contextual bandit，但主流系统通常不用完整 RL，而采用可微 router、top-k 选中路径、噪声和辅助损失等启发式方案。部分反馈是 MoE 训练一切困难的根源：router 的每一次选择都遮蔽了反事实，因此 router 的学习信号天然带有选择偏差，第 7 节的全部技术（噪声、辅助损失、bias）都是在不同程度上修补这个偏差。
+ 路由又带来部分反馈：一个 token 只经过被选 expert，模型无法直接观察“如果送到其他 expert 会怎样”。这很像 contextual bandit，但主流系统通常不用完整 RL，而采用可微 router、top-k 选中路径、噪声和辅助损失等启发式方案。部分反馈是 MoE 训练一切困难的根源：router 的每一次选择都遮蔽了反事实，因此 router 的学习信号天然带有选择偏差，第 7 节的全部技术（噪声、辅助损失、bias）都是在不同程度上修补这个偏差。
 
 #### MoE 流行的经验证据与其阴影
 
@@ -725,10 +689,6 @@ Transformer 中大量参数和 FLOPs 位于 FFN。以标准的扩张四倍配置
 ![Token-choice、expert-choice 与全局匹配](assets/routing-types.jpg)
 
 *图：三种 token-expert assignment 的对照。官方课件第 27 页；视频对应讲解区间：`00:48:15--00:49:00`。*
-
-![slide-027：Token-choice、expert-choice 与全局匹配](assets/slides/slide-027.jpg)
-
-本页（课件第 27 页）是三类 assignment 的课件原图：token-choice 中每个 token 的 router 独立指向自己的 top-k experts；expert-choice 中方向反转，每个 expert 从候选 tokens 中抓取固定数量；global assignment 则在整个 batch 上求解一个匹配问题。图中箭头方向的差异直观呈现了"选择权归属"这一根本区别。
 
 经验上，简单 token-choice top-k 仍是主流。RL 路由和线性匹配在理论上更直接，却因高方差、复杂度与在线约束没有成为默认。工程史的教训是：**在训练内循环里，一个可微、无状态、逐 token 独立的路由函数几乎总是胜过更聪明但有状态的全局方案**。
 
@@ -875,10 +835,6 @@ $$
 
 *图：router score、top-k mask 与加权 expert 输出。官方课件第 31 页；视频对应讲解区间：`00:52:57--00:54:20`。*
 
-![slide-031：标准 top-k router 的公式页](assets/slides/slide-031.jpg)
-
-本页（课件第 31 页）是 6.2 节三条公式的课件原页：softmax 得到 $s_{i,t}$、TopK 掩码得到 $g_{i,t}^l$、加权求和加 residual 得到 $h_t^l$。上方的手算例子（$T=3,N=4,K=2$）正是按这一页"softmax 后 top-k、不再归一化"的约定逐步演算的，读者可对照课件核对每个中间矩阵。
-
 不同模型的归一化顺序并不完全相同。DeepSeek V1–V2、Grok、Qwen 使用接近图中“softmax 后 top-k”的形式；Mixtral、DBRX、DeepSeek V3 常在 top-k 后对 selected scores 再归一化。不能把两种实现混成同一公式。
 
 #### 容量因子与 expert capacity 的推导
@@ -938,10 +894,6 @@ def topk_route_with_capacity(U, E, K=2, capacity_factor=1.25):
 
 *图：常规 top-2、细粒度分割与 shared-expert isolation。官方课件第 32 页；视频对应讲解区间：`00:54:20--00:55:43`。*
 
-![slide-032：细粒度 routed experts 与 shared experts](assets/slides/slide-032.jpg)
-
-本页（课件第 32 页）画出 expert 结构设计的两步演化：从常规 top-2 大专家，到把每个大专家切成多份小专家的 fine-grained segmentation（激活数同步增加、单专家尺寸减小），再到隔离出始终激活的 shared expert。两步都保持 active parameter budget 近似不变，只改变参数的组织方式——这正是组合数论证（$\binom{N}{K}$ 量级跃升）的几何对应。
-
 DeepSeek 的 ablation 支持细粒度与 shared expert，但 OLMoE 的受控实验没有复现 shared expert 的稳定收益。这种冲突很重要：shared expert 是合理设计假设，不是已被普遍证明的定律。一个可能的调和解释是：shared expert 的收益取决于 routed experts 是否真的出现了冗余的共通知识——当 routed experts 数量足够多、路由足够分散时，共通知识会自发地分布到各 experts 中，专门的 shared expert 反而成为容量浪费。
 
 ![slide-033：DeepSeekMoE 论文的细粒度与共享专家消融](assets/slides/slide-033.jpg)
@@ -993,10 +945,6 @@ hard top-k 对“未入选的集合变化”不可微：第 $K$ 名与第 $K+1$ 
 
 *图：确定性 router logits、噪声尺度与 KeepTopK。官方课件第 38 页；视频对应讲解区间：`01:00:33--01:02:25`。*
 
-![slide-038：Noisy top-k gating 的公式页](assets/slides/slide-038.jpg)
-
-本页（课件第 38 页）是 noisy top-k 的课件原页：router logit 由确定性部分与噪声部分相加而成，噪声标准差本身由输入经 softplus 参数化（可学习），最后再做 KeepTopK。把探索强度写成可学习参数是本页相对"固定 $\epsilon$-greedy"的关键升级——router 可以在训练过程中自主衰减不再需要的探索。
-
 ![slide-039：随机扰动的另一种实现——input jitter](assets/slides/slide-039.jpg)
 
 本页（课件第 39 页）展示 Fedus et al. 2022 中的实际代码：训练时对 router logits 乘上 $[1-\epsilon,1+\epsilon]$ 区间的均匀随机数（input jitter），并把 logits 转 float32 再做 softmax——前者是探索，后者是数值稳定，三行代码浓缩了本节两大主题。下方 ST-MoE 的稳定性表显示 input jitter 与 dropout 能把发散率从 2/6 压到 0/3（质量略有代价）；课件同时注明该技巧后来在 Zoph et al. 2022 中被移除，说明这类扰动是"有时有用、需要按配方验证"的工程件，而非普适组件。
@@ -1042,10 +990,6 @@ $$
 
 *图：hard load `f_i` 与 soft mass `P_i` 的点积。官方课件第 40 页；视频对应讲解区间：`01:03:13--01:06:00`。*
 
-![slide-040：Switch Transformer 均衡损失的公式页](assets/slides/slide-040.jpg)
-
-本页（课件第 40 页）是 Switch balancing loss 的课件原页：$\mathcal L_{\mathrm{bal}}=\alpha N\sum_i f_iP_i$。课件特别强调了本讲义上方梯度分析的关键点——$f_i$ 来自 argmax 与指示函数，不可微，实际反向传播只流经 $P_i$；正是这个"一半离散、一半连续"的结构让点积损失成为可实现的控制器。
-
 需要指出这个控制的代价：辅助损失与语言建模损失方向并不一致。强行均衡会让 router 把部分 tokens 送到次优 expert，$\alpha$ 因此是一个“为系统吞吐牺牲多少模型质量”的旋钮；$\alpha$ 过大时模型质量受损，过小时负载倾斜拖垮吞吐。这个张力直接催生了下一节的无辅助损失路线。
 
 ### 7.3 Expert balance、device balance 与“aux-loss-free”
@@ -1078,10 +1022,6 @@ bias 机制的精妙之处在于**解耦了“选择”与“权重”**：bias 
 
 *图：bias 参与集合排名，但 selected gate 仍使用原始 score。官方课件第 42 页；视频对应讲解区间：`01:07:12--01:07:49`。*
 
-![slide-042：DeepSeek V3 的 per-expert bias 机制](assets/slides/slide-042.jpg)
-
-本页（课件第 42 页）是 V3 bias 机制的课件原页：$s_{i,t}+b_i$ 只出现在 TopK 集合判断中，被选后的 gate $g'_{i,t}$ 仍取不含 bias 的 $s_{i,t}$。课件还用箭头标出 $b_i$ 的更新回路——按观测负载离线调整，不经过反向传播。这张图是"解耦选择与权重"最紧凑的视觉表达。
-
 因此“aux-loss-free”应谨慎理解：它主要指减少传统全局辅助均衡损失的依赖；同页仍保留 complementary sequence-wise auxiliary protection。把 V3 的方案概括为“完全没有均衡机制”是对设计的误读。
 
 OLMoE 的实验则给出反例：移除 balancing loss 后训练没有立即崩溃，但 expert 使用会明显失衡。这说明均衡是否必要与 router、初始化、规模和训练配方有关。更一般地，均衡机制的必要性随 expert 数量、token 基数与训练时长变化——小模型短期训练可以容忍倾斜，大模型长训则会因倾斜累积而损失容量利用率。
@@ -1089,10 +1029,6 @@ OLMoE 的实验则给出反例：移除 balancing loss 后训练没有立即崩�
 ![移除负载均衡损失的 OLMoE 实验](assets/no-balancing-ablation.jpg)
 
 *图：有/无 load balancing 时的 loss 与 expert load。官方课件第 43 页；视频对应讲解区间：`01:07:53--01:09:08`。*
-
-![slide-043：移除负载均衡损失的 OLMoE 实验](assets/slides/slide-043.jpg)
-
-本页（课件第 43 页）是 OLMoE 移除 balancing loss 的消融原图：左列训练与验证损失几乎不受影响（训练没有崩溃），但右列 expert 负载分布随训练推进明显拉开——少数 experts 承接了越来越多的 tokens。这组图精确刻画了"均衡是否必要"的中间地带：短期、小规模下倾斜是宽容的，但容量利用率在悄悄流失；是否演变为真问题，取决于规模与训练时长。
 
 ### 本章小结
 
@@ -1124,19 +1060,11 @@ $$
 
 *图：expert parallelism 与其他并行方式的组合。官方课件第 44 页；视频对应讲解区间：`01:11:39--01:12:47`。*
 
-![slide-044：MoE 的多维并行与通信拓扑](assets/slides/slide-044.jpg)
-
-本页（课件第 44 页）把 expert parallelism 画进完整的多维并行图景：data、tensor、pipeline、sequence parallelism 各自切分不同的张量轴，expert parallelism 再沿 expert 维叠加一层，tokens 在层内按路由跨设备流动。课件用这页强调：MoE 的通信图是所有并行方式中最不规则的——前几种并行的通信模式静态可预测，而 MoE 的 all-to-all 目标集由数据动态决定。
-
 token 按 expert 重排后，矩阵形状不再规则。MegaBlocks 一类实现把小矩阵乘合并成 block-sparse GEMM，减少 padding 与 kernel launch；更现代的 dropless 实现也避免因固定 capacity 直接丢 token。
 
 ![Block-sparse expert matrix multiplication](assets/block-sparse-matmul.jpg)
 
 *图：逐 expert 小 GEMM 与 block-sparse 合并。官方课件第 45 页；视频对应讲解区间：`01:12:47--01:13:55`。*
-
-![slide-045：Block-sparse expert matrix multiplication](assets/slides/slide-045.jpg)
-
-本页（课件第 45 页）是 MegaBlocks 的示意图：路由后每个 expert 分到数量不等的 tokens，逐个 launch 小 GEMM 既浪费 kernel 启动开销又需要 padding；block-sparse GEMM 把变长分块拼成一次稀疏矩阵乘，按块调度计算。这页是"理论 FLOPs 与实测吞吐之间隔着 kernel 工程"的典型案例——MoE 的算术节省只有在稀疏 kernel 成熟后才兑现为墙钟时间。
 
 LatentMoE / Nemotron-3 进一步在通信前下投影 activation、到 expert 侧再上投影，以额外计算换更少传输字节：若下投影比率为 $r$，上式中的通信量近似缩减为 $2Kdbr$。这与后面的 DeepSeek MLA 都使用“latent compression”思想，但一个压缩 expert communication，另一个压缩 KV cache，不应混为同一模块。
 
@@ -1153,10 +1081,6 @@ LatentMoE / Nemotron-3 进一步在通信前下投影 activation、到 expert �
 ![Capacity-limited MoE 的 token dropping](assets/token-dropping.jpg)
 
 *图：batch composition 可改变某个 token 是否被 expert 接收。官方课件第 47 页；视频对应讲解区间：`01:15:08--01:16:36`。*
-
-![slide-047：Capacity-limited MoE 的 token dropping](assets/slides/slide-047.jpg)
-
-本页（课件第 47 页）用两个不同的 batch 演示丢弃的随机性：同一个 token、同一个 router、同样的分数，仅仅因为同 batch 其他 tokens 的路由选择不同，在一个 batch 中被 expert 接收、在另一个 batch 中溢出丢弃。这张图把"丢弃事件依赖 batch 组成"这一抽象论断落到了具体例子上，也是上方概率分析的直观插图。
 
 > [!WARNING]
 > 这种随机性针对带 capacity/drop 的实现；不能推广到所有 MoE。Dropless routing 和更好的 sparse kernels 正是为避免这一问题而发展。评价早期 MoE 论文中“训练不稳定”的结论时，需要先区分不稳定来自架构本身还是来自 dropping 机制。
@@ -1183,10 +1107,6 @@ $$
 
 *图：低精度 softmax 敏感性、router FP32 与 z-loss。官方课件第 48 页；视频对应讲解区间：`01:16:36--01:17:58`。*
 
-![slide-048：Router FP32 与 z-loss 的公式页](assets/slides/slide-048.jpg)
-
-本页（课件第 48 页）是 router 数值稳定方案的课件原页：左侧指出 BF16 softmax 的舍入足以翻转 top-k 排序，因此 router logits 与 softmax 用 FP32 计算；右侧给出 z-loss $L_z=\frac1B\sum_i(\log\sum_j e^{x_j^{(i)}})^2$，惩罚 log-normalizer 的绝对量级。上方的机制分析（平移不变性、one-hot 饱和、梯度消失）逐条对应这一页的两个组件。
-
 课程展示的 ablation 表明 z-loss 在部分设置改善稳定性，但它不是所有模型都必需的万能修复；精度、初始化、clipping 与 router 设计要一起看。DeepSeek V3 改用 sigmoid 打分后，每个 affinity 独立压缩到 $(0,1)$，量级失控的问题在结构上就大幅缓解——架构选择可以替代损失补丁，这是数值稳定性设计的一条普遍经验。
 
 ![slide-049：移除 z-loss 的 OLMoE 消融](assets/slides/slide-049.jpg)
@@ -1206,10 +1126,6 @@ Upcycling 则把已有 dense checkpoint 的 FFN 复制或拆分成 experts，再
 ![Dense checkpoint 到 MoE 的 upcycling](assets/upcycling.jpg)
 
 *图：从 dense FFN 初始化多个 experts，以及额外预训练成本。官方课件第 51 页；视频对应讲解区间：`01:19:41--01:20:59`。*
-
-![slide-051：Dense checkpoint 到 MoE 的 upcycling](assets/slides/slide-051.jpg)
-
-本页（课件第 51 页）是 upcycling 的流程原图：dense FFN 被复制成多份 expert 副本，加挂 router 后继续训练；图中同时标出后续仍需的预训练量。课件借此强调对称打破问题——复制出的 experts 参数逐位相同，必须靠继续训练中的随机性分化，这就是 upcycling 无法绕开的隐性账单。
 
 MiniCPM 与 Qwen 的案例说明 upcycling 可以成功；但如果目标从一开始就是超大 MoE，直接稀疏预训练往往更经济，因为无需先完整支付 dense pretraining。Upcycling 的合理定位是**复用沉没成本**：当手头已有一个训练良好的 dense 模型时，它是把既有资产升级到稀疏架构的捷径，而不是新项目的默认起点。
 
@@ -1254,10 +1170,6 @@ $$
 
 *图：V1 的 shared/routed experts、标准 top-k 与均衡目标。官方课件第 54 页；视频对应讲解区间：`01:22:33--01:22:55`。*
 
-![slide-054：DeepSeek MoE V1 的结构页](assets/slides/slide-054.jpg)
-
-本页（课件第 54 页）是 V1 的课件原页：16B total / 2.8B active、2 个 shared experts、细粒度 routed experts、标准 softmax top-k，配 expert-level 与 device-level 双重辅助均衡。上方公式的三项结构（residual + shared + routed）即出自本页，V1 因此可被视为"现代 MoE 原型"的最小完整实例。
-
 ### 9.2 V2：把通信写进路由目标
 
 V2 的课程配置为 236B total / 21B active。它引入 top-M device routing：先限制 token 访问的设备集合，再从这些设备上的 experts 中选择；communication balancing 同时约束通信流入和流出。
@@ -1267,10 +1179,6 @@ top-M device routing 的效果可以用第 8.1 节的通信模型量化：若 ex
 ![DeepSeek MoE V2](assets/deepseek-moe-v2.jpg)
 
 *图：V2 的 top-M device routing 与 communication balancing。官方课件第 55 页；视频对应讲解区间：`01:22:55--01:23:25`。*
-
-![slide-055：DeepSeek MoE V2 的结构页](assets/slides/slide-055.jpg)
-
-本页（课件第 55 页）是 V2 的课件原页：236B total / 21B active，路由先在设备粒度做 top-$M$ 筛选、再在选中设备内做 expert top-$K$，通信均衡同时约束流入与流出。上方用每 token 通信对端数从 $K$ 压到 $\min(M,K)$ 的量化分析，正是对本页机制的直接展开。
 
 这里的关键原则是“respect your systems”：架构目标函数不仅优化语言建模 loss，也要反映设备拓扑和通信代价。V2 标志着 MoE 设计从“统计模型 + 事后系统工程”转向“统计目标与系统约束联合优化”。
 
@@ -1303,10 +1211,6 @@ $$
 ![DeepSeek MoE V3](assets/deepseek-moe-v3.jpg)
 
 *图：V3 的 sigmoid score、top-k、selected normalization 与 seq-wise protection。官方课件第 56 页；视频对应讲解区间：`01:23:25--01:23:50`。*
-
-![slide-056：DeepSeek MoE V3 的结构页](assets/slides/slide-056.jpg)
-
-本页（课件第 56 页）是 V3 的课件原页：sigmoid 独立打分、top-k 选集合、只在选中集合内归一化，配在线 expert bias 与 sequence-wise 辅助保护。三步解耦的公式与本页逐项对应；也请注意本页正是下方 WARNING 所指"标题写 V3、参数行误写 V2"的冲突页，引用时以官方技术报告为准。
 
 > [!WARNING]
 > 官方课件第 56 页标题为 V3，但参数行误写 V2；expert 总数又与课程前面的配置表不一致。这里保留讲者明确给出的 total/active/active-expert 口径，不静默补写有冲突的 expert 总数。引用 V3 路由配置时应以 DeepSeek 官方技术报告为准。
@@ -1359,10 +1263,6 @@ $$
 
 *图：MLA 从低维 latent 生成 Q/K/V，并标出推理时缓存位置。官方课件第 57 页；视频对应讲解区间：`01:23:50--01:24:42`。*
 
-![slide-057：MLA 的 latent KV cache 架构](assets/slides/slide-057.jpg)
-
-本页（课件第 57 页）是 MLA 架构的课件原页：hidden state 先经 down-projection 压为低维 $c_t^{KV}$，再分别 up-project 出各 heads 的 K 与 V；图中用虚线框标出推理时真正需要缓存的只有 latent（外加少量 RoPE 维度）。上方"信息瓶颈的位置"分析与 MHA/GQA/MLA 字节数对照表，都是对本页的定量展开。
-
 #### 缓存收益的定量推导：MHA / GQA / MLA 每 token 字节数对比
 
 我们把三种架构的**每 token、每层** KV cache 字节数逐项算出（均按 BF16/FP16，2 字节/元素）：
@@ -1413,10 +1313,6 @@ $$
 
 *图：无 RoPE 时可合并 projection，加入位置旋转后不再成立。官方课件第 58 页；视频对应讲解区间：`01:24:42--01:25:05`。*
 
-![slide-058：MLA 的矩阵吸收与 RoPE 冲突](assets/slides/slide-058.jpg)
-
-本页（课件第 58 页）是矩阵吸收推导的课件原页：第一行展示无位置编码时 $W^QW^{UK}$ 可离线合并，第二行展示 RoPE 旋转矩阵 $R_q,R_k$ 卡在中间后合并失效。上方"每一对 $(q,k)$ 对应不同中间矩阵"的分析逐字对应这两行公式，也解释了为什么最终方案要保留 64 维显式 RoPE key 通道。
-
 课件给出的直觉性解法是保留少量 non-latent key dimensions 专门承载 RoPE，content 部分继续使用 latent cache。这就是上表缓存字节数中“+64 维”的来源：位置信息走显式小通道，内容信息走低秩大通道，两者拼接构成完整 key。讲者没有展开完整多头实现，因此这里也不超出课程范围补全论文细节；对完整设计（包括 query 侧压缩与吸收实现）感兴趣的读者应查阅 DeepSeek-V2 技术报告。
 
 ### 10.2 MTP：让模型同时学习更远的 token
@@ -1462,10 +1358,6 @@ MTP 的训练目标可写成各深度损失的加权和 $\mathcal L=\sum_k\lambd
 
 *图：DeepSeek MTP、EAGLE 对照与多步预测模块。官方课件第 59 页；视频对应讲解区间：`01:25:05--01:25:41`。*
 
-![slide-059：DeepSeek 的 Multi-Token Prediction](assets/slides/slide-059.jpg)
-
-本页（课件第 59 页）是 MTP 的课件原页：左侧画出链式模块结构——第 $k$ 个模块拼接上一深度表示与已知未来 token 的 embedding，经轻量 Transformer block 预测 $t_{i+k+1}$；右侧与 EAGLE 类外置草稿方案对照。上方的梯度信号三重分析与"只用一个额外深度"的边界讨论，分别对应本页的结构图与课件旁注。
-
 MTP 有两种动机：额外未来目标迫使共享表示捕捉更长程的可预测结构；推理时多个候选又可作为内置 speculative decoding 草稿。课件的“only do MTP with one token ahead”更可能指只使用一个额外预测深度，不能据此断言它退化成普通 next-token prediction。与 EAGLE 等外置草稿模型方案相比，MTP 的草稿能力与主模型共享训练与表示，省去了单独训练和维护草稿模型的成本，但草稿的预测视野也受限于训练时使用的深度。
 
 ### 本章小结
@@ -1487,10 +1379,6 @@ MTP 有两种动机：额外未来目标迫使共享表示捕捉更长程的可�
 ![课程的 MoE 总结页](assets/moe-summary.jpg)
 
 *图：稀疏激活、top-k 路由与经验有效性三条结论。官方课件第 60 页；视频对应讲解区间：`01:25:43--01:26:14`。*
-
-![slide-060：课程的 MoE 总结页](assets/slides/slide-060.jpg)
-
-本页（课件第 60 页）是全讲收束页，与上方讲者的三条口头结论一一对应：稀疏性让参数容量与每 token 计算解耦；离散 top-k 路由难优化但启发式已够用；大量经验证据表明 MoE 具有成本效益。这三条同时也是本讲前半场的镜像结论——attention alternatives 同样是用选择器与状态换取"容量与计算的解耦"。
 
 ### 统一视角：对历史与参数做条件访问
 
