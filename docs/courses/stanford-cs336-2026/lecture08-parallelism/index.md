@@ -1,20 +1,4 @@
----
-description: "CS336 Lecture 8：并行化基础——数据并行（DDP/ZeRO/FSDP）、流水线并行、张量并行、序列/上下文并行、专家并行的完整数学推导与系统分析"
-tags:
-  - lecture
-  - parallelism
-  - distributed-training
-  - zero
-  - fsdp
-  - pipeline-parallel
-  - tensor-parallel
-  - sequence-parallel
-  - context-parallel
-  - expert-parallel
-  - megatron
----
-
-# Lecture 8：并行化基础（Parallelism Basics）
+# Stanford CS336 2026 Lecture 8：Parallelism Basics
 
 > 本讲是 CS336 系统线的核心：当模型大到单卡装不下、数据多到单卡算不完时，如何把训练切到成百上千张 GPU 上。我们自底向上地走一遍——先看硬件网络与集合通信原语，再依次推导数据并行（DDP → ZeRO-1/2/3 → FSDP）、流水线并行（GPipe → 1F1B → Interleaved → Zero-Bubble）、张量并行（Megatron 的列切/行切与 $f$/$g$ 算子）、序列并行与上下文并行、专家并行，最后看真实系统（Llama 3 405B、DeepSeek-V3、Gemma 2、Mixtral、Qwen 3 等）如何把这些维度组合成"3D/4D 并行"。
 
@@ -29,7 +13,7 @@ tags:
 - §7 上下文并行与 Ring Attention（slide 54）
 - §8 并行方式对比总结（slide 55）
 - §9 3D/4D 并行组合与真实系统配置（slide 56–72）
-- §10 全讲回顾、延伸阅读与资源（slide 73）
+- §10 总结与延伸（slide 73）
 
 ---
 
@@ -140,6 +124,10 @@ Part 1 的三个 takeaway：
 3. 一切协同都建立在少数几个**简单的集合通信原语**之上（All-Reduce、Reduce-Scatter、All-Gather、Broadcast、点到点）。
 
 带着"线性内存 + 线性算力"这两个检验标准，进入 Part 2：逐个考察并行策略。
+
+### 本章小结
+
+本章从单机算力与内存的双重极限出发，说明了多 GPU、多机并行的必然性，并自底向上介绍了机内 NVLink/NVSwitch 与机间 InfiniBand 的带宽层级、五种集合通信原语，以及 All-Reduce = Reduce-Scatter + All-Gather 的带宽最优分解（每节点通信量约 $2M$）。TPU mesh 与 GPU 全互连的拓扑对比、GB200 NVL72 与 CloudMatrix 384 的 domain size 案例共同说明：网络拓扑没有普适最优，域大小是硬件为并行策略预付的成本。通信层级与"线性内存、线性算力"两个扩展目标，构成后续所有并行策略的设计约束。
 
 ---
 
@@ -268,6 +256,10 @@ DP 的第一个本质局限：**算力线性扩展是有条件的**。左图（M
 
 DP 的第二个本质局限更直接：ZeRO-3 让内存线性分片，但代价是逐层 gather 参数——**每层都要等通信**；当模型大到单层参数都装不下单卡，或者层计算量小到通信完全藏不住时，纯 DP/ZeRO 路线失效。这把我们推向模型并行：**必须切模型本身**。两条切法——沿**深度**切（流水线并行，§3）与沿**宽度**切（张量并行，§4）。
 
+### 本章小结
+
+本章从朴素数据并行（DDP）切入：梯度 All-Reduce 的通信量为每卡约 $2\times\#\text{params}$，但训练状态完全冗余，混合精度 Adam 下每参数 16 字节的账目使 7B 模型即超出单卡容量。ZeRO 三阶段逐层消除冗余——Stage 1 切优化器状态（通信不变）、Stage 2 切梯度（与反向重叠）、Stage 3/FSDP 连参数一起切（通信约 $3M$，换取严格的线性内存扩展）。数据并行的两个本质局限——critical batch size 对算力扩展的约束、模型本身装不下——把我们引向模型并行。
+
 ---
 
 ## 3. 流水线并行：沿深度切分模型
@@ -335,6 +327,10 @@ $$
 
 关键观察：**B 部分必须按层序串行**（它产生传给上一层的梯度），但 **W 部分只依赖本层的输入 $x$ 和上游梯度，可以在之后的任意时刻计算**。于是调度器可以用 W 任务去填充流水线的气泡空档：图 2 的 1F1B 调度里插入青色 W 块，图 3 给出手工构造的 ZB-H1、ZB-H2 调度，把气泡压到接近零——代价是调度复杂度与峰值内存（$x$ 要存到 W 被执行为止）上升。这类"把计算拆细再重排"的思路是现代流水线调度（ZeroBubble、Chimera、Hanayo 等）的共同主题。
 
+### 本章小结
+
+本章讲解沿深度切分模型的流水线并行：朴素层并行的利用率只有 $1/N$，GPipe 用 micro-batch 流水把气泡占比压到 $(p-1)/(m+p-1)$，因此需要足够大的 batch 来摊薄。PP 的通信只是 stage 边界激活大小的点到点传输，与参数量无关，天然适合跨机慢链路。调度层面的持续进化——1F1B 压缩在途激活缓存、interleaved 用带宽换更小气泡、Zero-Bubble 利用 B/W 梯度可分离的性质填空——把流水线效率一步步推向极限。
+
 ---
 
 ## 4. 张量并行：沿宽度切分矩阵乘
@@ -390,6 +386,10 @@ TP vs PP 的对照：
 - **TP 的缺点**：通信量大得多。每个 micro-batch，PP 只在 stage 边界传 $bsh$ 的激活（点到点）；TP 每层要传 $8bsh \times \frac{n-1}{n}$ 的 All-Reduce 流量（前向 2 次 + 反向 2 次，每次 All-Reduce 收+发各 2 个方向），且是**阻塞式集合通信**。
 
 定量结论：TP 的通信频率是 PP 的 $\mathcal{O}(L)$ 倍（$L$ 为层数），所以 TP 只能活在**低延迟、高带宽**的互连域内（NVLink，约 600–900 GB/s）；PP 的稀疏点到点通信才能跨机（InfiniBand，约 25–50 GB/s）。§9 的组合规则直接从这条通信层级推出。
+
+### 本章小结
+
+本章讲解沿宽度切分矩阵乘的张量并行：列切与行切配对（Megatron 的 $f$/$g$ 共轭算子）使一个 MLP 前向只需一次 All-Reduce，整个 Transformer 层每层共 4 次激活大小的集合通信，且反向自动正确。TP 无气泡、实现简单，但通信频率是 PP 的 $\mathcal{O}(L)$ 倍，实测 TP 超过单机 8 卡 NVLink 域后吞吐骤降，因此 TP 必须封死在高速机内域——这条边界直接决定了 3D 组合的层级安排。
 
 ---
 
@@ -464,6 +464,10 @@ $$
 
 **选择性激活重计算**（selective activation recomputation）：只对"内存大、重算便宜"的部分（softmax 前后的 $as^2$ 项）不存激活、反向时重算，把 $5\frac{as}{h}$ 项抹掉——这比全量重计算（连线性层输出都重算，约多 30% 计算）划算得多。最终形态 $\frac{34}{t}sbh$：**激活内存与张量并行组大小成完美反比**，激活墙正式拆除。这就是当代长序列大模型训练的标配组合。
 
+### 本章小结
+
+本章处理参数之外的另一堵墙——激活内存：逐算子分解给出每层 $sbh\left(34 + 5\frac{as}{h}\right)$ 的精确公式，其中注意力分数项随序列长度二次增长。TP 只能把大部分项除以 $t$，剩余的 $10sbh$ 全部来自逐 token 算子；序列并行沿序列维切分这些算子，把 $g$ 换成 All-Gather、$\bar{g}$ 换成 Reduce-Scatter，通信量与 TP 逐字节相同。配合选择性重计算，最终激活内存降至 $\frac{34}{t}sbh$，实现随卡数的完全线性缩减。
+
 ---
 
 ## 6. 专家并行：MoE 的并行维度
@@ -504,6 +508,8 @@ EP 在行为上"大致像 MLP 的 TP"——高带宽需求、降低每卡激活�
 
 ![DeepEP：为 MoE 专家并行定制的 all-to-all 通信库及其通信计算重叠设计](assets/deepep-overlap.jpg){ width="760" }
 
+*图：视频补充页展示 DeepEP 的 dispatch/combine 内核与通信—计算 overlap；这也直接确认字幕中误识别的"DPP"应为 DeepEP。（字幕区间：00:56:16--00:57:59）*
+
 EP 的概念很简单（两次 all-to-all），但**把 all-to-all 做快是一门独立的系统工程**。DeepSeek 开源的 DeepEP 库展示了其中的设计深度：
 
 - **专用 dispatch/combine kernel**：高吞吐、低延迟的 all-to-all GPU kernel，支持 FP8 等低精度传输（token 激活先量化再发，带宽直接减半/再减半）；
@@ -511,6 +517,10 @@ EP 的概念很简单（两次 all-to-all），但**把 all-to-all 做快是一�
 - **免 SM 占用的通信计算重叠**：传统重叠要用专门的 SM 跑通信 kernel（图上：Stream 0/1 交错执行 Attention/Dispatch/MoE/Combine，通信 kernel 与计算 kernel 抢 SM）；DeepEP 用 hook-based 方法让 RDMA 在后台进行，**不占用任何 SM**——Attention 1 的计算带着 background RDMA 同时跑，计算流因此可以用满全部 SM、更宽的 GEMM（图下：dispatch/combine 的 issue/receive 完全沉入计算时间线）。这也是它支持 SM 数量控制（SM number control）的原因：留给通信的 SM 是显式预算。
 
 读法：§6.1 说"EP 通信比 TP 少"，但少不等于便宜——all-to-all 是不规则流量（§1.5 引用的 Dally/Dean 对谈），在 mesh 拓扑上是多跳、在交换网络上怕拥塞，且每个 MoE 层都要发生两次。DeepEP 的存在本身就是证据：**EP 是当今并行维度里工程难度最高的一个**（§9.4 总览表的"EP can be big (but hard!)"），也是推理侧 MoE  Prefill/Decoding 延迟优化的主战场。
+
+### 本章小结
+
+本章讲解 MoE 的专家并行：把 $E$ 个专家分配到各卡，用 All-to-All Dispatch/Combine 路由 token，而不是切矩阵乘——因此 GEMM 效率更高、通信更少，专家层优先 EP 而非 TP。EP 与 DP 共享副本维度（EP < DP），与 TP 在 MoE 上叠加会拉低利用率，Megatron 的 MoE Parallel Folding 进一步把注意力和专家层解耦成两套独立并行维度。DeepEP 的工程案例则说明：把不规则的 all-to-all 做快（低精度传输、非对称域转发、免 SM 占用重叠）是 EP 真正的难点。
 
 ---
 
@@ -523,6 +533,10 @@ EP 的概念很简单（两次 all-to-all），但**把 all-to-all 做快是一�
 执行过程（对照图中 Device 1、2 的流水线）：每张卡固定持有自己的 query 块与初始 KV 块；第 $k$ 步，各卡用当前 KV 块对自己的 query 块做 **blockwise attention**（在线 softmax 累积，FlashAttention 风格的分块归并：维护 running max $m$、归一化因子 $\ell$ 与部分输出 $O$，新块到来时按 $\text{softmax}$ 重缩放合并），同时把 KV 块发给环上下一张卡、接收上一张卡传来的新 KV 块；$c$ 步后每个 query 块都见过全部 KV，注意力精确完成。FFN、LayerNorm 等逐 token 算子则直接各算各段（blockwise feedforward）。
 
 关键性质：**通信（KV 块的环形传递）与计算（当前块的注意力）可以重叠**——只要每块注意力的计算时间超过 KV 块的传输时间，CP 的通信就是免费的；且内存中每卡只存 $s/c$ 的 KV 与激活，序列长度可以随卡数线性扩展（百万 token 级训练靠它）。因果注意力的负载不均（前面的 query 块要 attend 的 KV 少）通过对称的"zigzag"切分或双环调度来平衡。CP 与 TP 的关系：两者都切激活不切参数，CP 切序列维、TP 切宽度维，可以叠加（Llama 3 长上下文阶段 TP8×CP16，见 §9）；与 SP 的区别在于 SP 只处理逐 token 区段、CP 处理注意力本身。CP 的通信是**激活/KV 大小、沿环点对点**，对带宽的要求介于 TP 与 PP 之间——这就是为什么它通常被放在"机内+近机间"的第二级网络上（§9 的 [TP, CP, PP, DP] 层级）。
+
+### 本章小结
+
+本章讲解上下文并行（Ring Attention）：针对注意力的全局序列依赖，把长序列沿序列维切到多张卡上，通过 KV 块的环形传递与在线 softmax 的分块归并完成精确注意力，FFN 等逐 token 算子则各算各段。通信（KV 传递）与计算（块注意力）可重叠，每卡只存 $s/c$ 的 KV 与激活，使可训练序列长度随卡数线性扩展——百万 token 级长上下文训练正是靠这个维度撑起来的。
 
 ---
 
@@ -542,6 +556,10 @@ EP 的概念很简单（两次 all-to-all），但**把 all-to-all 做快是一�
 | **专家 EP (MoE)** | **每个 MoE 层 token 路由 all-to-all** | 专家权重 $\sim 1/\text{EP}$ | 不切 | token 路由 all-to-all | 否，且**需要每专家足够 token** | 难 |
 
 读表的方式：先问"内存墙在哪"——参数状态装不下走 ZeRO/FSDP/PP/TP，激活装不下走 SP/CP/重计算，专家权重装不下走 EP；再问"通信预算在哪层网络"——梯度归约最耐延迟放最外，TP 集合通信最贪婪放 NVLink 域，PP/CP 的点到点放中间层，EP 的 all-to-all 看拓扑；最后问"batch 与序列够不够用"——DP 要 critical batch、PP 要 micro-batch 数、EP 要每专家 token 数、CP 要长序列。
+
+### 本章小结
+
+本章用一张总表把 DDP/ZeRO-1、FSDP/ZeRO-3、流水线、张量、序列/上下文、专家六种并行方式放在同一坐标系里对比：通信模式、每 rank 参数与激活内存、主要带宽开销、能否扩展全局 batch、易用性。选择策略的方法论归结为三个问题——内存墙在哪里、通信预算落在哪层网络、batch 与序列够不够用。
 
 ---
 
@@ -672,9 +690,13 @@ Meta 还披露了**网络感知的并行排序 [TP, CP, PP, DP]**：越内层的
 
 三条规律（Patterns）：**TP 普遍 ≤ 8**（NVLink 域容量的硬约束）；**EP 可以很大（但很难）**——64 路 EP 需要精心的通信重叠与负载均衡；**长上下文阶段用大 CP**（16–64）。
 
+### 本章小结
+
+本章把各并行维度组合成完整训练方案：TPU book 的每层计算/通信账目给出按每芯片 batch（$B/N$）选择策略的定量依据，经验法则是 TP 用满 NVLink 域、PP 跨机、DP（+ZeRO）收尾、长序列加 CP、MoE 加 EP。Narayanan 2021 的 PTD-P 实证表明精心组合的 3D 并行在数千卡上保持平坦的每卡吞吐（TP=8 是实测最优点），而纯 ZeRO-3 会随规模衰减。Llama 3 405B、DeepSeek-V3、Gemma 2、Mixtral、Nemotron 3、Qwen 3 的真实配置全部印证这些规律；Llama 3 的故障统计则提醒我们，万卡规模下容错本身就是日常工程。
+
 ---
 
-## 10. 全讲回顾、延伸阅读与资源
+## 总结与延伸
 
 ![Slide 73：全讲回顾](assets/slides/slide-073.jpg){ width="640" }
 
@@ -700,7 +722,7 @@ Meta 还披露了**网络感知的并行排序 [TP, CP, PP, DP]**：越内层的
 
 ---
 
-## 要点回顾与自检
+### 要点回顾与自检
 
 完成本讲后，你应该能够不翻资料回答：
 
@@ -714,4 +736,8 @@ Meta 还披露了**网络感知的并行排序 [TP, CP, PP, DP]**：越内层的
 8. 为什么 MoE 专家层优先 EP 而非 TP？EP 与 DP 的相互作用是什么？（§6.1–§6.2：GEMM 效率、通信量、token permutation；EP 通常借 DP 的维度，EP < DP）
 9. 3D 并行的组合规则及其通信层级依据？为什么 TP 通常封死在 8？（§9.2–§9.3：TP→NVLink 域、PP→机间、DP→最外层；§4.2 与 §9.3 的实测）
 10. Llama 3 405B 三个阶段的并行配置如何随目标变化？（§9.4：DP128→长上下文换 CP16，全局 batch 恒定 16M tokens，[TP, CP, PP, DP] 网络感知排序）
+
+### 本章小结
+
+本章回顾了全讲的三个核心结论——超过一定规模后多 GPU、多机并行是必选项；并行问题没有单一解，实践中总是组合使用多种维度；组合有简单可解释的经验法则。延伸阅读清单覆盖 ZeRO、FSDP、Megatron、PTD-P、序列并行、GPipe/PipeDream、Zero-Bubble、Ring Attention、TPU book、Megatron-Core 文档以及 Llama 3 与 DeepSeek-V3 的技术报告，十道自检题则对应全讲的关键公式、机制与设计规则。
 

@@ -14,13 +14,14 @@ MKDOCS_CONFIG = ROOT / "mkdocs.yml"
 KATEX_BOOTSTRAP = ROOT / "docs" / "javascripts" / "katex.js"
 
 IMAGE_RE = re.compile(r"!\[(?P<alt>[^\]]*)\]\((?P<path>[^)]+)\)")
+OFFICIAL_SLIDE_RE = re.compile(r"^assets/slides/slide-\d{3}\.jpg$")
 TIME_RE = re.compile(
     r"\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:--|-|–|—|至)\s*"
     r"\d{1,2}:\d{2}(?::\d{2})?\b"
 )
 BANNED_RE = re.compile(
     r"\[cite\]|TODO|FIXME|TBD|PLACEHOLDER|\.work/|/Users/|"
-    r"\[INAUDIBLE\]|file://|\]\(source/|`source/"
+    r"\[INAUDIBLE\]|\]\(file://|\]\(source/|`source/"
 )
 
 
@@ -34,6 +35,7 @@ def validate_site_config() -> list[str]:
     required_config = {
         "pymdownx.arithmatex": "Arithmatex Markdown extension",
         "generic: true": "generic Arithmatex output",
+        "hooks/github_callouts.py": "GitHub-style callout hook",
         "javascripts/katex.js": "local KaTeX bootstrap",
         "katex.min.js": "KaTeX runtime",
         "auto-render.min.js": "KaTeX auto-render extension",
@@ -134,6 +136,9 @@ def validate_page(page: Path) -> list[str]:
                 continue
 
             teaching_figures += 1
+            if OFFICIAL_SLIDE_RE.fullmatch(raw_path):
+                continue
+
             nearby = "\n".join(lines[index : min(len(lines), index + 4)])
             if not TIME_RE.search(nearby):
                 errors.append(

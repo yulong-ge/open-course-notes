@@ -74,6 +74,9 @@ plugins:
         - zh
         - en
 
+hooks:
+  - hooks/github_callouts.py
+
 markdown_extensions:
   - abbr
   - admonition
