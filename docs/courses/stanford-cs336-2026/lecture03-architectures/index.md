@@ -75,7 +75,7 @@ $$
 - $K$：每个位置的匹配键向量；
 - $V$：每个位置可被聚合的内容向量。
 
-在上面的 `[3, 4]` 玩具输入中，若有两个 head、每个 head 两维，那么投影结果可从 `[n, d_model] = [3, 4]` 重排为 `[heads, seq, head_dim] = [2, 3, 2]`。每个 head 都会独立做一次“Q 找 K，再按权重读取 V”。
+在上面的 $[3,4]$ 玩具输入中，若有两个 head、每个 head 两维，那么投影结果可从 $[n,d_{\text{model}}]=[3,4]$ 重排为 $[\text{heads},\text{seq},\text{head\_dim}]=[2,3,2]$。每个 head 都会独立做一次“Q 找 K，再按权重读取 V”。
 
 为什么要拆成多个 head 而不是用一个大的 Q/K/V？可以从两个角度理解。其一是表达能力：单个内积只能在一个相似性度量下匹配，多个 head 允许模型在不同子空间里同时维持多种匹配关系——一个 head 关注句法依存，另一个关注指代关系。其二是工程角度：head 拆分把一次大的矩阵运算变成若干次中小规模、可独立调度的运算，并且为后文 GQA/MQA 的“按 head 共享”提供了粒度单位。
 
@@ -132,7 +132,7 @@ $$
 | 2 | 0 | 0 | $-\infty$ |
 | 3 | 0 | 0 | 0 |
 
-例如第二个 token 在 mask 后的 scores 若为 `[2, 1, −∞]`，softmax 约为 `[0.731, 0.269, 0]`：未来的第三个 token 权重严格为零，其余权重总和为一。softmax 因而不是“选择唯一 token”，而是产生一个可微的加权读取方案。
+例如第二个 token 在 mask 后的 scores 若为 $[2,1,-\infty]$，softmax 约为 $[0.731,0.269,0]$：未来的第三个 token 权重严格为零，其余权重总和为一。softmax 因而不是“选择唯一 token”，而是产生一个可微的加权读取方案。
 
 causal mask 的工程实现只需一次下三角布尔索引。下面这段代码同时演示了 mask 构造与数值稳定的 softmax：
 
@@ -193,18 +193,30 @@ $$
 - $F(X)$：子层建议写入 residual stream 的增量；
 - $Y$：相加后的输出，shape 与 $X$ 完全相同。
 
-若某个二维 token 表示是 `[1, −1]`，子层给出的修正是 `[0.2, 0.3]`，残差输出就是 `[1.2, −0.7]`。这种“保留旧信息、逐层写增量”的结构，正是后文讨论 pre-norm、干净 residual path 和训练稳定性的起点。
+若某个二维 token 表示是 $[1,-1]$，子层给出的修正是 $[0.2,0.3]$，残差输出就是 $[1.2,-0.7]$。这种“保留旧信息、逐层写增量”的结构，正是后文讨论 pre-norm、干净 residual path 和训练稳定性的起点。
 
 残差结构还有一个常被忽略的统计效果：若各层增量近似零均值且弱相关，$L$ 层之后 residual stream 的方差大致随层数线性增长，$\operatorname{Var}(x_L)\approx \operatorname{Var}(x_0)+\sum_\ell \operatorname{Var}(F_\ell)$。这意味着深层网络中，后层子层看到的是信噪比不断变化、幅度逐渐增大的输入——这正是为什么归一化放在哪里（第 2 章）、以及初始化时是否把子层输出缩得很小（如把输出投影初始化为零或乘小系数），都会对训练动力学产生实质影响。
 
 ### 本章小结
 
-- embedding 把离散 token ID 查表成连续向量，序列因此成为 `[seq, d_model]` 矩阵；查表本身按数据移动计费而非按 FLOP 计费。
+- embedding 把离散 token ID 查表成连续向量，序列因此成为 $[\text{seq},d_{\text{model}}]$ 矩阵；查表本身按数据移动计费而非按 FLOP 计费。
 - Q 用来查询，K 用来匹配，V 是实际被加权读取的内容；多 head 让不同子空间并行维持多种匹配关系。
 - causal mask 阻止未来信息进入当前 token；softmax 把可见位置的 scores 变成概率权重；减最大值是保证浮点路径安全的恒等变换。
 - residual block 让每个子层只学习增量，并保持输入输出 shape 一致；其代价是 residual stream 的方差随深度累积。
 
 ## 1. 如何读懂架构演化：从原始 Transformer 到现代配方
+
+2017 年的 Transformer 同时包含 encoder 与 decoder；每个子层后做 LayerNorm，FFN 使用 ReLU，位置由绝对位置嵌入提供。其历史结构如下。
+
+![slide-003：起点——回顾标准 Transformer 的选择](assets/slides/slide-003.jpg)
+
+课件把 2017 年原始 Transformer 的三项关键选择列为复习起点：位置嵌入使用正弦/余弦函数 $PE_{(pos,2i)}=\sin(pos/10000^{2i/d_{\text{model}}})$、$PE_{(pos,2i+1)}=\cos(pos/10000^{2i/d_{\text{model}}})$，FFN 使用 ReLU（$\operatorname{FFN}(x)=\max(0,xW_1+b_1)W_2+b_2$），归一化采用 post-norm 的 LayerNorm（图中每个子层后的 Add & Norm）。这三项选择在今天的公开模型中几乎全部被替换，但替换它们的理由各不相同——后文第 2、3、5 章分别对应这三处改动。注意图中 FFN 公式还带有 bias 项 $b_1,b_2$，这与下一页现代变体"无 bias"形成第一处对照。
+
+现代大语言模型通常只保留因果 decoder 堆栈，并常见以下组合：pre-norm 或 RMSNorm、无 bias 的线性层、SwiGLU/GeGLU、RoPE，以及针对解码吞吐设计的 GQA。课件用一张总览图把这些差异放在同一页面。
+
+![slide-004：读者实现的现代变体及其差异](assets/slides/slide-004.jpg)
+
+这一页列出读者在课程作业中实现的现代变体与原始 Transformer 的四项差异：LayerNorm 移到 block 之前（pre-norm）、使用旋转位置编码（RoPE）、FFN 使用 SwiGLU 而非 ReLU、所有线性层（及 LayerNorm）不含 bias 常数项。左侧总图还显示现代堆栈是纯粹的 decoder block 重复，输入为 `(batch_size, seq_len, d_model)` 的 token embedding 张量。课件同时抛出两个贯穿全讲的问题——"为什么我们选这些？""你应该选什么？"；本讲义第 2、3、5 章分别给出这四项差异的推导与证据。
 
 ### 1.1 先确定评价轴，而不是背模型名字
 
@@ -238,19 +250,9 @@ $$
 
 ### 1.2 原始 Transformer 与现代 decoder-only 模型
 
-2017 年的 Transformer 同时包含 encoder 与 decoder；每个子层后做 LayerNorm，FFN 使用 ReLU，位置由绝对位置嵌入提供。其历史结构如下。
-
-![原始 Transformer 编码器—解码器结构](assets/original-transformer.jpg)
-*图 1：原始 Transformer 的 encoder–decoder、post-norm、ReLU 与绝对位置编码（视频 00:01:47–00:02:54）。*
-
-现代大语言模型通常只保留因果 decoder 堆栈，并常见以下组合：pre-norm 或 RMSNorm、无 bias 的线性层、SwiGLU/GeGLU、RoPE，以及针对解码吞吐设计的 GQA。课件用一张总览图把这些差异放在同一页面。
-
-![现代 Transformer 的常见架构选择](assets/modern-transformer.jpg)
-*图 2：现代 decoder-only Transformer 的常见组件（视频 00:01:47–00:04:53）。*
-
 为什么 encoder 消失了？这不是说双向注意力没有价值，而是训练目标与推理形态共同选择的结果：因果语言建模只需要左向上下文，单一堆栈让预训练、微调和在线解码共享同一套内核与权重布局；而 encoder–decoder 架构在纯生成任务上要额外维护 cross-attention 与两套堆栈，参数与服务成本都不划算。双向性带来的理解能力损失，则通过更大规模的因果预训练被经验性地弥补回来。
 
-逐项对照两张图，可以把七年的架构演化列成一张“改动—动机”对照表（后续各章逐一展开）：
+逐项对照 slide-003 与 slide-004 这两张图，可以把七年的架构演化列成一张“改动—动机”对照表（后续各章逐一展开）：
 
 | 组件 | 原始 Transformer | 现代常见选择 | 主要动机 |
 |---|---|---|---|
@@ -305,8 +307,9 @@ $$
 
 两种写法的差别看似只是把 $\operatorname{N}$ 挪了一个位置，但对深层堆叠而言后果截然不同。关键观察是：post-norm 中归一化**躺在残差主路上**——信息从第 0 层流到第 $L$ 层，途中要经过 $L$ 次 LayerNorm；pre-norm 中残差主路是纯粹的加法链，归一化只出现在每个分支的入口。主路上每多一个非恒等变换，梯度就多乘一个非恒等的 Jacobian 因子。
 
-![视频中的 pre-norm 与 post-norm 对照](assets/video-pre-post-norm.jpg)
-*图 3：讲者比较“先残差后归一化”和“先归一化后残差”（视频 00:07:31–00:09:29）。*
+![slide-010：pre-norm 与 post-norm——2024 年的共识](assets/slides/slide-010.jpg)
+
+这一页被讲者称为“2024 年所有人意见一致的一件事”：设置 LayerNorm 时应让它不影响主要的残差信号通路（即 pre-norm，图中右侧灰色主路只做 addition）。配图出自 Xiong et al. 2020，右侧还并排给出 Post-LN 与 Pre-LN 两套逐步记号：post-norm 中 $x_{l,i}^{post,3}=\operatorname{LayerNorm}(x_{l,i}^{post,2})$ 等归一化步骤直接躺在主路状态上，pre-norm 中主路只做 $x_{l,i}^{pre,3}=x_{l,i}^{pre}+x_{l,i}^{pre,2}$ 这样的纯加法，且表格最后一行注明 pre-norm 通常在堆栈末端补一个 Final LayerNorm——这正是下文提到的 LLaMA 配方做法。课件同时指出两个例外事实：BERT 用的是 post-norm，而 OPT-350M 是一个有些滑稽的 post-norm 例外——讲者表示自己也不知道原因。下文的 Jacobian 推导将解释这个共识背后的数学机制。
 
 pre-norm 更稳定的直觉来自它保留的“干净残差路径”。对一层求 Jacobian：
 
@@ -394,8 +397,9 @@ $$
 - $\varepsilon$：数值稳定项；
 - $j$：均方根统计中的通道索引。
 
-![LayerNorm 与 RMSNorm](assets/layernorm-rmsnorm.jpg)
-*图 4：课件对照两种归一化；正文采用含 $1/d$ 的标准 RMSNorm 定义（视频 00:13:56–00:14:50）。*
+![slide-014：LayerNorm 与 RMSNorm 的对照及代表模型](assets/slides/slide-014.jpg)
+
+课件在这一页对照两种归一化并列出阵营：LayerNorm 对 $d_{\text{model}}$ 维做均值—方差归一化（$y=\frac{x-\mathbb{E}[x]}{\sqrt{\operatorname{Var}[x]}+\epsilon}*\gamma+\beta$），代表模型为 GPT-1/2/3、OPT、GPT-J、BLOOM；RMSNorm 不减均值、不加 bias，代表模型为 LLaMA 家族、PaLM、Chinchilla、T5。注意课件给出的 RMSNorm 简写 $y=\frac{x}{\sqrt{\|x\|_2^2}+\varepsilon}*\gamma$ 省略了均值因子 $1/d$（标准 RMS 是 root mean square），正文采用的是含 $1/d$ 的标准定义（见下方 WARNING 与公式推导）。
 
 > [!WARNING]
 > 课件的 RMSNorm 简写容易被读成 $\sqrt{\sum_i x_i^2}$，漏掉均值因子 $1/d$。标准 RMS 是 root **mean** square；实现还可能在累积精度、epsilon 位置和是否保留可学习缩放上不同。
@@ -406,8 +410,9 @@ RMSNorm 少了均值计算和 bias，表达更简洁，但不能只凭 FLOP 数�
 
 这一页给出 RMSNorm 的现代解释——更快且质量相当：少了均值计算的操作数、少了 bias 参数的存储。但讲者随即追问“这个解释说得通吗”，并引用 Ivanov et al. 2023 的分析指出：矩阵乘法才是 FLOP 与显存的绝对主体，归一化省下的那点 FLOP 在总账里微不足道。这为下一页的结论埋下伏笔。
 
-![FLOPs、运行时间与数据移动并不等价](assets/flops-runtime-data-movement.jpg)
-*图 5：低 FLOP 操作也可能因数据搬运而占据可观运行时间（视频 00:15:34–00:17:31）。*
+![slide-016：FLOP 不等于运行时间](assets/slides/slide-016.jpg)
+
+这一页给出本讲最重要的系统教训之一：**FLOPS are not runtime**。左侧 Ivanov et al. 2023 的实测表显示：tensor contraction 占 99.80% 的 FLOP 却只占 61.0% 的运行时间；statistical normalization 只占 0.17% 的 FLOP 却占 25.5% 的运行时间；element-wise 操作占 0.03% FLOP、13.5% 时间——低 FLOP 操作合计吃掉了近四成挂钟时间。右侧子图给出单个 block 内各算子的标注（MHA 旁 "43G" 是 FLOP 数，"153" 是 FLOP 与访存量之比；LayerNorm 旁为 "29M" 与 "3.5"），直观显示归一化的 arithmetic intensity 比 MHA 低约 40 倍。结论写在页面上：RMSNorm 的收益来自 *data movement* 的减少——少读少写一条 bias 向量、少一次均值归约。arithmetic intensity 的概念在这里首次出场，后文第 8 章分析 decode 瓶颈时将把它用到极致。
 
 这里需要一个系统概念：**arithmetic intensity** 是每搬运一个字节完成多少次算术操作。矩阵乘法能复用数据，强度高；norm、逐元素激活往往强度低。所以现代架构也常去掉线性层 bias：质量上通常无明显收益，同时减少参数、内核分支和数据流复杂度。
 
@@ -612,8 +617,9 @@ $$
 - $\operatorname{ReLU}$：门控分支的激活函数；
 - $\odot$：逐元素乘法。
 
-![ReGLU 的双分支门控](assets/reglu-gating.jpg)
-*图 6：一条分支产生 gate，另一条分支携带内容，二者逐元素相乘（视频 00:21:50–00:23:23）。*
+![slide-022：GLU 如何改造 FFN 的前半段](assets/slides/slide-022.jpg)
+
+课件给出从普通 FFN 到门控变体的构造步骤：普通 FFN 的"前半段"是 $\operatorname{FF}(x)=\max(0,xW_1)W_2$ 中红色标出的线性加 ReLU；GLU 的做法是给它扩增一项逐元素线性项，即 $\max(0,xW_1)\to\max(0,xW_1)\otimes(xV)$，于是得到 $\operatorname{FF}_{\operatorname{ReGLU}}(x)=(\max(0,xW_1)\otimes xV)W_2$。这一页强调的关键点是门控引入了一个**额外参数矩阵 $V$**——正是这个第三矩阵引出了第 3.2 节的 $2/3$ 宽度配平问题。
 
 把 gate 激活替换为 GELU 或 SiLU，就得到 GeGLU 与 SwiGLU：
 
@@ -628,8 +634,9 @@ $$
 - $\operatorname{SiLU}(z)=z\,\sigma(z)$：Sigmoid Linear Unit；
 - $\sigma(z)$：sigmoid 函数。
 
-![GeGLU 与 SwiGLU](assets/geglu-swiglu.jpg)
-*图 7：GLU 家族只改变 gate 分支的非线性（视频 00:23:23–00:25:01）。*
+![slide-023：标准 FFN 的门控变体及代表模型](assets/slides/slide-023.jpg)
+
+这一页列出两个主流门控变体及其阵营：GeGLU（$\operatorname{FFN}_{\operatorname{GEGLU}}(x,W,V,W_2)=(\operatorname{GELU}(xW)\otimes xV)W_2$，代表模型 T5 v1.1、mT5、LaMDA、Phi-3、Gemma 2/3/4）与 SwiGLU（$\operatorname{FFN}_{\operatorname{SwiGLU}}(x,W,V,W_2)=(\operatorname{Swish}_1(xW)\otimes xV)W_2$，其中 swish 即 $x\cdot\operatorname{sigmoid}(x)$，代表模型 LLaMA 1/2/3、PaLM、Mistral、OLMo 及 2023 年后的大多数模型）。课件在这一页用脚注点出关键工程细节：门控模型的 $d_{ff}$ 会按 $2/3$ 缩小——其定量推导见第 3.2 节。
 
 门控相对单分支激活的本质提升，在于它把“是否通过”与“通过什么”拆成两组独立参数。对中间层第 $k$ 个通道，输出为 $a(xW_g)_k\cdot(xW_v)_k$：$W_v$ 的第 $k$ 行决定该通道编码什么内容，$W_g$ 的第 $k$ 行决定什么输入模式下该通道开放。普通 FFN 中一个通道只能同时承担这两个职责。从函数逼近角度看，门控使 FFN 对输入是**分段双线性**的——固定 gate 分支时，输出对 $xW_v$ 线性；固定 value 分支时，对 gate 分支也（分段）线性——乘积结构大幅增加了单位参数能表达的分段数量。这也解释了门控的一个训练特性：gate 分支的梯度为 $\sigma'(\cdot)\cdot (xW_v)$，value 分支的梯度为 $a(\cdot)\cdot W_o^\top(\cdots)$，两条分支互为对方的梯度调制因子，优化早期常出现门控值缓慢分化、随后通道功能快速特化的两阶段现象。
 
@@ -749,8 +756,9 @@ $$
 - $\operatorname{Attn}$：注意力分支；
 - $\operatorname{FFN}$：前馈分支。
 
-![串行与并行 Transformer block](assets/serial-parallel-layers.jpg)
-*图 8：串行路径具有分支依赖，并行路径可同时计算 attention 与 FFN（视频 00:27:09–00:29:29）。*
+![slide-028：并行层——起源与工程收益](assets/slides/slide-028.jpg)
+
+这一页记录并行层的实践谱系：最初出现在 GPT-J（Wang & Komatsuzaki 2021），采用者包括 PaLM、GPT-NeoX，近期模型则有 Cohere Command A、Falcon 2 11B、Command R+。页面中央引用的 PaLM 原文给出两种写法的对照——串行 $y=x+\operatorname{MLP}(\operatorname{LayerNorm}(x+\operatorname{Attention}(\operatorname{LayerNorm}(x))))$ 对并行 $y=x+\operatorname{MLP}(\operatorname{LayerNorm}(x))+\operatorname{Attention}(\operatorname{LayerNorm}(x))$——以及一条关键消融证据：并行形式在大规模下训练速度约快 15%（MLP 与 Attention 的输入矩阵乘法可以融合），8B 规模有小幅质量损失而 62B 规模没有，PaLM 据此外推 540B 时质量中性。课件总结其工程收益：若实现得当，LayerNorm 可以被两个分支共享（只做一次），矩阵乘法可以融合调度。下文的 Jacobian 对比给出这一改动的优化侧解释。
 
 并行 block 的 Jacobian 结构完全不同：
 
@@ -814,8 +822,9 @@ class ParallelBlock(nn.Module):
 
 自注意力若只比较 token 内容，就无法区分“同一个词出现在第 2 位”和“出现在第 200 位”。位置方案大体包括：把绝对位置向量加到输入、在 attention score 上加相对位置 bias、或直接让 query/key 的几何关系编码相对距离。
 
-![位置表示的主要方案](assets/position-embedding-variants.jpg)
-*图 9：绝对位置、相对 bias 与旋转式位置编码的对照（视频 00:31:04–00:33:01）。*
+![slide-030：位置嵌入的多种变体及代表模型](assets/slides/slide-030.jpg)
+
+课件把位置方案列为带公式的对照表：正弦嵌入 $\operatorname{Embed}(x,i)=v_x+PE_{pos}$（原始 Transformer）、可学习绝对嵌入 $\operatorname{Embed}(x,i)=v_x+u_i$（GPT-1/2/3、OPT）、相对嵌入（T5、Gopher、Chinchilla，在注意力计算中直接加位置向量，$e_{ij}=\frac{x_iW^Q(x_jW^K+a_{ij}^K)^\top}{\sqrt{d_z}}$）、以及 RoPE（GPT-J、PaLM、LLaMA 及大多数 2024 年后的模型，下一页展开）。注意三类方案的作用位置逐行后移：从加在输入 embedding 上，到加在 attention logits 上，再到（RoPE）以旋转方式进入 Q/K 本身——这张表与本章三条路线的分析一一对应。
 
 三种方案各有一个结构性短板。绝对位置嵌入把位置向量加到输入 embedding 上，位置信息在进入注意力前就与内容混在一起，模型需要自己学会把它分离出来；相对位置 bias（如 T5、ALiBi 的做法）直接在 logits 上加一个只依赖距离的标量项，实现简单、外推性好，但每个 head 只能表达一个标量距离偏好，位置与内容之间没有乘法交互；RoPE 走的是第三条路——让位置以**旋转**的方式进入 Q/K，使内积自动成为相对位移的函数。
 
@@ -931,8 +940,9 @@ $$
 
 现在把两个绝对位置同时向右平移 3，改成 $i'=4,j'=5$，内容向量不变。此时旋转后的 query 为 $(1,0)$，key 为 $(-1,0)$，内积仍为 $-1$。两组位置分别是 $(1,2)$ 与 $(4,5)$，但都有 $j-i=1$；结果相同，直接验证了内积只依赖相对位移。写成 $i-j$ 或 $j-i$ 只是旋转方向的符号约定，关键是绝对位置的共同平移会消去。
 
-![视频中的 RoPE 旋转直觉](assets/video-rope-rotation.jpg)
-*图 10：以二维旋转解释为何注意力内积只保留相对角度（视频 00:34:25–00:36:06）。*
+![slide-032：用旋转不变性构造位置编码的直觉](assets/slides/slide-032.jpg)
+
+课件用一句话例子的图示讲解构造思路：我们希望嵌入对绝对位置不变，而内积本身对任意旋转不变——于是把同一个词（如 "we"）在不同位置的表示做成同一向量的不同旋转：左图是位置无关的嵌入；中图里 "we know that" 的 "we" 旋转 0 个位置、"know" 旋转 1 个位置；右图里 "of course we know" 的 "we" 旋转 2 个位置、"know" 旋转 3 个位置。两个句子中 "we" 与 "know" 的相对距离都是 1，两个旋转后向量的内积自然只反映角度差 $1\cdot\theta$。这幅直觉图与下方的代数推导一一对应：内积的旋转不变性是"因"，相对位置性是"果"。
 
 还有一个值得注意的范数性质：旋转是正交变换，不改变向量长度，$\|R(i\theta)x\|=\|x\|$。因此 RoPE 只改变 Q/K 的**方向**而不改变其尺度，attention logit 的幅度仍由内容向量的范数决定，位置只调制相对角度。这一点与第 7 章的 QK norm 形成自然分工：RoPE 管位置几何，QK norm 管范数尺度，两者作用在向量性质的不同方面，可以叠加。
 
@@ -959,13 +969,15 @@ $$
 - $q_i^{(m)},k_j^{(m)}$：位置 $i,j$ 上第 $m$ 个二维 query/key 子向量；
 - $\widetilde q_i^{(m)},\widetilde k_j^{(m)}$：应用 RoPE 后的 query/key。
 
-![RoPE 的分块旋转矩阵](assets/rope-matrix.jpg)
-*图 11：高维向量由多个二维旋转块组成，而非一个高维“整体角度”（视频 00:36:06–00:38:15）。*
+![slide-034：RoPE 的实际数学——乘 sine/cosine 而非加法](assets/slides/slide-034.jpg)
+
+课件给出 RoPE 的完整公式：$f_{\{q,k\}}(x_m,m)=R_{\Theta,m}^{d}W_{\{q,k\}}x_m$，其中 $R_{\Theta,m}^{d}$ 是由 $d/2$ 个二维旋转块组成的块对角矩阵，第 $m'$ 块为 $\begin{pmatrix}\cos m\theta_{m'}&-\sin m\theta_{m'}\\ \sin m\theta_{m'}&\cos m\theta_{m'}\end{pmatrix}$——即对 query/key 的每个二维通道对乘以对应位置频率的 sine/cosine 项，而非显式构造大矩阵。页脚强调它与正弦位置嵌入的本质差异：RoPE 是**乘性**的（not additive），内积展开后没有正弦嵌入那种位置与内容的交叉项（no cross terms）。这正是 slide-031 函数方程在构造层面的兑现：乘性旋转使位置只以角度差的形式进入内积。
 
 快频率通道对区分近距离位置，慢频率通道对承载更长周期结构，类似一组多尺度相位特征。实现时通常用 even/odd 通道重排和预计算的 sine/cosine 完成，不显式构造大矩阵。
 
-![RoPE 的向量化实现](assets/rope-code.jpg)
-*图 12：用逐元素 sine/cosine 与通道配对实现旋转（视频 00:38:15–00:39:02）。*
+![slide-035：RoPE 的实现代码导览](assets/slides/slide-035.jpg)
+
+课件展示了 RoPE 的参考实现结构（HF 风格代码）：`q_proj/k_proj/v_proj` 投影与 reshape 是"常规注意力的准备工作"，随后 `cos, sin = self.rotary_emb(value_states, position_ids)` 取出 RoPE 的 cos/sin 预计算表，`apply_rotary_pos_emb(query_states, key_states, cos, sin)` 把旋转乘到 query/key 上——注意 `value_states` 不参与旋转，其余部分与标准多头自注意力完全相同。课件特别加注一点：在**每次注意力操作时**都要施加嵌入，以保证位置不变性——RoPE 不是只在输入层做一次的位置向量，这一点在下方的逐行对应实现中可以看清。
 
 频率的几何级数设计值得细算。以 $d_h=128$（即 64 个二维对）、$\Theta=10000$ 为例：最快的一对 $m=0$ 有 $\theta_0=1$，即每个位置旋转 1 弧度，约每 6.28 个位置转满一圈，适合区分相邻几个 token 的相对距离；最慢的一对 $m=63$ 有 $\theta_{63}=10000^{-126/128}\approx 10^{-3.94}\approx 1.15\times10^{-4}$，其周期为 $2\pi/\theta_{63}\approx 5.5\times10^{4}$ 个位置——足以覆盖数万 token 的上下文而不发生相位回绕。不同通道对如同一组不同齿比的齿轮：快齿轮记录精确的小位移，慢齿轮记录粗粒度的大位移，内积则是所有通道对贡献之和
 
@@ -1059,8 +1071,9 @@ $$
 - $d_{\text{model}}$：模型隐藏维度；
 - $8/3$：由 $4\times$ 普通 FFN 乘预算因子 $2/3$ 得到。
 
-![普通 FFN 与 GLU 的宽度换算](assets/glu-ffn-ratios.jpg)
-*图 13：两矩阵 FFN 与三矩阵 GLU 在相近预算下的中间宽度（视频 00:44:37–00:46:42）。*
+![slide-038：例外之一——GLU 变体的 $8/3$ 换算](assets/slides/slide-038.jpg)
+
+这一页给出 $4\times$ 规则的第一类例外：GLU 变体按 $2/3$ 缩小，故多数门控模型取 $d_{ff}=\frac{8}{3}d_{model}$。课件附表列出实际比值——PaLM 为 4、Mistral 7B 与 LLaMA-2 70B 为 3.5、LLaMA 70B 为 2.68、Qwen 14B 为 2.67、DeepSeek 67B 为 2.68、Yi 34B 为 2.85、T5 v1.1 为 2.5，可见真实模型围绕 $8/3\approx2.67$ 上下浮动而非精确命中（PaLM、LLaMA-2、Mistral 略大），与第 3.2 节的预算配平推导互为印证。
 
 ![slide-039：例外之二——T5 的 64 倍 FFN](assets/slides/slide-039.jpg)
 
@@ -1068,8 +1081,9 @@ $$
 
 但 T5 等实验也探索了远高于 $4\times$ 的中间维度，并不支持一个尖锐唯一最优值。课件展示的曲线更像宽阔的经验盆地：在固定预算下，一段范围内的性能相近。
 
-![FFN 比例的宽阔经验盆地](assets/ffn-ratio-basin.jpg)
-*图 14：FFN 宽度并非只有一个精确最优点（视频 00:47:54–00:49:55）。*
+![slide-040：为什么是这个倍数区间——经验盆地](assets/slides/slide-040.jpg)
+
+这一页给出倍数区间的证据（出自 Kaplan et al. 2020，50M 参数规模）：以 $d_{ff}/d_{model}$ 为横轴（对数刻度）、loss 增幅为纵轴，在 1 到 10 倍之间存在一个宽阔的经验盆地，该超参数在盆地内接近最优；无论固定 $n_{head}=8$ 还是固定 $d_{model}/n_{head}=64$，两条曲线都呈现同一形态——超过约 10 倍后 loss 显著上升。换言之，4 倍与 8/3 倍之所以成为默认值，部分原因是它们都落在盆地内部——选择压力更多来自盆地之外（太窄或太宽都明显变差），而非盆地之内的精细位置。
 
 “盆地平坦”这件事本身有重要的实践推论：若性能在一个区间内几乎不变，那么超参数选择的自由度就应该全部让渡给**系统约束**——选择能被硬件整除、利于并行切分、便于内核融合的宽度，而不是逼近某个论文里的精确比例。例如 $d_{\text{gate}}$ 对齐到 128 或 256 的倍数，可使矩阵分块不浪费张量核；$d_{\text{model}}$ 能被 tensor-parallel 度数整除，可避免切片时的负载不均。这些都是零质量代价的纯收益。
 
@@ -1135,15 +1149,17 @@ $$
 - $d_{\text{model}}$：隐藏宽度；
 - $L$：Transformer block 数量。
 
-![公开模型的宽度与深度选择](assets/aspect-ratio-models.jpg)
-*图 15：不同模型族在层数与隐藏宽度之间采用不同折中（视频 00:51:31–00:53:12）。*
+![slide-044：深还是宽——各模型的宽深比出人意料地一致](assets/slides/slide-044.jpg)
+
+这一页提出"模型应该多深多宽"的问题，并指出各模型在 $d_{model}/n_{layer}$ 这个宽深比上"出人意料地一致"：BLOOM 为 205、T5 v1.1 为 171、PaLM 540B 为 156、GPT-3/OPT/Mistral/Qwen/OLMo 3 一族为 128、LLaMA/LLaMA-2 为 102、Gemma 3 为 87、Gemma 4 为 61、T5 11B 为 33。课件用括号标注了一个"甜点区"（sweet spot）——大约 87–156 这一段（OLMo 3、LLaMA、Gemma 3 附近），过深（T5 11B 的 33，极端深窄）或过宽（BLOOM 的 205）都是少数派。这张表回答了上一页留下的问题：不仅倍数有共识，宽深比也有共识，且新一代模型（Gemma 4 的 61）呈现"加深"趋势。
 
 ![slide-045：宽深比的系统考量](assets/slides/slide-045.jpg)
 
 这一页指出宽深比选择背后的系统约束（引用 Tay et al. 2021）：极深的模型更难并行化、延迟更高——层数是串行关键路径的唯一来源，无法通过加宽弥补。这与正文对深度方向代价的展开（pipeline 气泡、激活存储线性增长）互为补充：课件给结论，正文给机制。
 
-![宽深比的实验对照](assets/aspect-ratio-evidence.jpg)
-*图 16：固定或近似固定预算下，宽深比存在较宽的可行区间（视频 00:53:12–00:55:08）。*
+![slide-046：宽深比缩放的实验证据](assets/slides/slide-046.jpg)
+
+这一页汇总两组证据。左图（Kaplan et al. 2020）：在 50M/274M/1.5B 三个参数规模下，以 $d_{model}/n_{layer}$ 为横轴（对数刻度）画 loss，从约 10 到约 200 的宽阔区间内各规模曲线几乎贴合——"很宽的一段架构取得相近性能"，只有比值超过数百（过宽过浅）或低到个位数（过深过窄）时才明显变差。右图（Tay et al. 2021）：以 Base 为参照，分别沿 $d_{model}$（DM）与 $n_{layer}$（NL）两个方向扩模型，在相同 FLOPs 下比较负对数困惑度与 SuperGLUE 准确率——加深（NL 序列）与加宽（DM 序列）在同等预算下收益大体相当，但深模型在下游任务上并不占优，印证"深 ≠ 更好、成本更高"的判断。两图合起来解释了甜点区为什么存在：盆地内部平坦，选择自由度大，于是工程约束（并行效率、延迟）成了决定性因素。
 
 更深会增加串行关键路径、激活存储和 pipeline 切分难度；更宽能提高大矩阵效率，却加大每层参数、通信与激活。讲者的结论不是“固定某个比值”，而是公开模型落在一片相对宽的区域。
 
@@ -1158,8 +1174,9 @@ $$
 
 词表变大可以缩短序列，却让 embedding 与输出 softmax 变大；词表变小则相反。近年来公开模型的词表常从数万扩到十万乃至更多，原因还包括多语言、代码和工具调用特殊 token。
 
-![公开模型的词表大小](assets/vocabulary-sizes.jpg)
-*图 17：不同模型族选择的 vocabulary size 差异很大（视频 00:55:11–00:57:12）。*
+![slide-047：典型的词表大小——单语与多语/生产系统的两个量级](assets/slides/slide-047.jpg)
+
+这一页给出词表大小的双表对照。单语模型（30–50k）：原始 Transformer 37000、GPT 40257、GPT-2/3 50257、T5/T5 v1.1 32128、LLaMA 32000；多语/生产系统（100–250k）：mT5 250000、PaLM 256000、GPT-4 100276、Gemma 4 262144、DeepSeek 100000、Qwen 15B 152064、Yi 64000。课件结论："单语词表不需要很大，多语词表需要。"这张表是本节权衡的实证底图：词表从 3 万跳到 25 万不是风格问题，而是覆盖范围（多语言、代码）问题——代价则是 embedding/unembedding 参数与 softmax 计算随之放大（Gemma 4 的 262144 个 embedding 行在 7.2 节的 z-loss 讨论中还会再次出现）。
 
 不同 tokenizer 下，per-token perplexity 不能直接横比，因为一个 token 覆盖的原始字符或字节数不同。更公平的归一化指标是 bits per byte：
 
@@ -1217,8 +1234,9 @@ $$
 - $\lambda$：weight-decay 系数；
 - $t$：优化步索引。
 
-![Weight decay 与学习率的联动](assets/weight-decay-learning-rate.jpg)
-*图 18：AdamW 中实际衰减强度同时受 $\lambda$ 与学习率调度影响（视频 01:01:39–01:03:24）。*
+![slide-050：为什么给 LLM 用 weight decay——不是防过拟合，而是与学习率联动](assets/slides/slide-050.jpg)
+
+这一页引用 Andriushchenko et al. 2023 关于 LLM weight decay 的观察。左图：训练 loss 与验证 loss 的散点几乎落在同一条对角线上，$\lambda_{WD}=0.0/0.1/0.3$ 三组完全混合——说明在这个规模下验证与训练误差同步，weight decay **不是为了控制过拟合**。中、右两图揭示真正机制：固定学习率下 $\lambda_{WD}$ 越大训练 loss 越高；但配合 cosine 学习率衰减（或中途把学习率调到极小，虚线），大 weight decay 的模型在学习率衰减后反而收敛到更低的 loss——weight decay 在训练中期维持较大的有效学习率与权重范数，等效于"延迟"了学习率衰减的生效，即它与学习率调度耦合而非独立的正则化旋钮。这正是下方"每步乘法因子 $1-\eta_t\lambda$"推导的经验对应物。
 
 每步乘法因子近似为 $1-\eta_t\lambda$，因此同一个 $\lambda$ 在不同学习率、训练步数下含义不同。讲者建议把它视为与学习率计划耦合的优化超参数，而不是独立正则化旋钮。
 
@@ -1246,11 +1264,13 @@ $$
 
 规模增大后，训练损失偶发尖峰并非小事：一次数值爆炸可能污染 optimizer state，浪费数千张 GPU 的计算。课件先定位两处风险点：输出 vocabulary softmax，以及 attention softmax。
 
-![规模增大后的训练稳定性曲线](assets/training-stability-curves.jpg)
-*图 19：更大训练运行可能出现突发 loss spike，需要架构级稳定措施（视频 01:05:01–01:06:24）。*
+![slide-052：稳定性技巧——不要训练出蓝色曲线那样的模型](assets/slides/slide-052.jpg)
 
-![语言模型中的两处 softmax](assets/two-softmax-risk-points.jpg)
-*图 20：输出层 softmax 与 attention softmax 分别受 logit 尺度影响（视频 01:06:24–01:07:07）。*
+这一页以 OLMo 0424 7B（蓝）与 OLMo 2 1124 7B（橙）的对比开场：上图 loss 曲线中蓝色伴随大量突发尖峰，下图梯度的 L2 范数更触目惊心——蓝色曲线在 60 万步中反复冲到 3.0 附近，橙色曲线则始终压在 0.5 以下。课件的建议直白："不要训练看起来像蓝色曲线的模型！"这组曲线给出了本章的存在理由：损失尖峰与梯度范数尖峰同步出现，而后面三节的 z-loss、QK norm 与 soft-cap 正是把蓝色曲线压成橙色曲线的架构级手段（OLMo 2 的稳定性改进就包括 QK norm 与重排的归一化位置，见 slide-013）。
+
+![slide-053：问题出在哪里——当心 softmax](assets/slides/slide-053.jpg)
+
+这一页回答"数值问题出在模型的哪里"：softmax 因指数运算和除法可能表现不良（ill-behaved due to exponentials / division by zero）。课件用两张结构图标出语言模型中仅有的两处 softmax——左图整体栈顶端的输出 softmax（Norm → Linear/输出嵌入 → Softmax → 输出概率），右图 Transformer block 内因果多头自注意力（w/ RoPE）模块内部的那一处。这张图是本章的"作战地图"：7.2 节的 z-loss 管第一处（输出端 logit 尺度），7.3 节的 QK norm 与 7.4 节的 soft-cap 管第二处（注意力 logits），三个技巧与两处风险点的对应关系一目了然。
 
 softmax 本身可以用“先减最大值”稳定计算，但若上游 logit 范数持续变大，仍会造成极尖分布、低精度下溢、梯度恶化或训练动力学失控。三个常见控制点分别作用在输出 logits、Q/K 向量和 attention logits。
 
@@ -1273,8 +1293,9 @@ $$
 - $V$：词表大小；
 - $\log\sum_v e^{z_v}$：log-partition，也称 log-sum-exp。
 
-![z-loss 约束输出 log-partition](assets/z-loss.jpg)
-*图 21：z-loss 控制输出 softmax 前的整体 logit 尺度（视频 01:07:07–01:09:28）。*
+![slide-054：输出 softmax 的稳定性——z-loss](assets/slides/slide-054.jpg)
+
+这一页从 softmax 的定义出发推导 z-loss：$\log P(x)=\log\frac{e^{U_r(x)}}{Z(x)}=U_r(x)-\log Z(x)$，其中 $Z(x)=\sum_{r'=1}^{|V|}e^{U_{r'}(x)}$ 是配分函数；在损失上加一项把 $\log Z$ 拉向 0 的惩罚，$L=\sum_i\left[\log P(x_i)-\alpha\log^2 Z(x_i)\right]$（源自 Devlin 2014）。课件引用了 PaLM 论文的原文——"我们额外使用辅助损失 $z\_loss=10^{-4}\cdot\log^2 Z$，鼓励 softmax 归一化因子 $\log Z$ 接近 0，我们发现这能提高训练稳定性"——并列出其他采用者：Baichuan 2（2023）、DCLM（2024）、OLMo 2（2025）、OLMo 3（2025）。注意惩罚目标写的是 $\log Z$ 而非单个 logit：它不限制 token 间的相对差异，只压整体尺度，这正是它与下方逐 logit 推导的对应关系。
 
 > [!WARNING]
 > 若论文把目标写成要**最大化**的 log-likelihood，正负号会与上式相反。判断 z-loss 的作用应看它是否惩罚过大的 log-partition，而不能脱离优化约定机械背符号。
@@ -1374,8 +1395,9 @@ $$
 - $\widetilde S$：平滑限制在约 $[-c,c]$ 的 logits；
 - $A$：attention 权重。
 
-![Attention logit soft-cap](assets/logit-soft-cap.jpg)
-*图 23：用 $c\tanh(S/c)$ 平滑限制 attention logit（视频 01:12:07–01:13:56）。*
+![slide-056：用 Tanh 做 logit soft-capping](assets/slides/slide-056.jpg)
+
+这一页介绍第三种稳定手段：用 $\operatorname{logits}\leftarrow \text{soft\_cap}\cdot\tanh(\operatorname{logits}/\text{soft\_cap})$ 把 logits 平滑地限制在 $[-\text{soft\_cap},+\text{soft\_cap}]$ 内（引 Gemma 2 论文，原始想法出自 Bello et al. 2016），Gemma 2 对自注意力层取 50.0、最终层取 30.0。但课件紧接着提出疑问"防止 logits 爆炸，但会不会有性能问题？"并给出 OLMo 的消融表（95% 置信区间 $\pm0.1$）：bf16 基线 perplexity 11.19，soft_cap 11.24（变差），而 QKV_norm 10.85、QK_norm_cap 11.00、QK_norm 10.84、QK_FC_norm 10.87（均优于基线）——这正是正文所说"稳定性—表达力的直接交换"的定量证据，也解释了为什么 OLMo 系选择 QK norm 而非 soft-cap。
 
 当 $|S|\ll c$ 时，$\tanh(S/c)\approx S/c$，变换近似恒等；当 $|S|$ 很大时才逐渐饱和。它能提高稳定性，却也可能阻止模型形成非常尖锐的注意力，课件中的结果提示 perplexity 可能受损。因而这是稳定性—表达力的直接交换。
 
@@ -1426,8 +1448,9 @@ $$
 - $O(nd_{\text{model}}^2)$：Q/K/V/O 与 FFN 等大线性投影的代表性量级；
 - $O(n^2d_hH_q)$：全注意力 score 与 value 聚合的序列二次项。
 
-![Prefill 阶段的注意力计算](assets/attention-prefill-cost.jpg)
-*图 24：prefill 同时处理整段 prompt，矩阵较大、并行度高（视频 01:15:16–01:16:59）。*
+![slide-058：注意力计算的成本分析——prefill 的算术强度很高](assets/slides/slide-058.jpg)
+
+这一页正式展开注意力的成本核算（GQA/MQA 章节的起点）：$XQ$ 与 $K^\top X^\top$ 相乘得到 $h$ 组 $n\times n$ 的全配对注意力分数，经 softmax 后与 $XV$ 相乘、再混合投影，输出 $\in\mathbb{R}^{n\times d}$（$d$ 为隐藏维度、$b$ 为 batch、$n$ 为序列长度、$h$ 为头数、$k=d/h$ 为头维度）。总算术运算量为 $O(bnd^2)$，总内存访问为 $O(bnd+bhn^2+d^2)$（分别来自读 $X$、softmax 分数矩阵和投影矩阵），于是算术强度为 $O\!\left(\left(\frac{1}{k}+\frac{1}{bn}\right)^{-1}\right)$——很高，"GPU 可以一直跑满"。这解释了 prefill 为什么接近 compute-bound，也为下一页 decode 的对比埋下伏笔：瓶颈不在计算量，而在内存访问的结构。
 
 大矩阵乘法有较高数据复用，prefill 往往更接近 compute-bound。注意不要把所有“平方”混为一谈：$d_{\text{model}}^2$ 来自宽度方向投影，$n^2$ 才来自 token 两两交互。
 
@@ -1504,8 +1527,9 @@ $$
 - $d_h$：单个 head 维度；
 - $\operatorname{softmax}$：沿历史位置归一化。
 
-![Decode 阶段的 KV 读取成本](assets/attention-decode-cost.jpg)
-*图 25：decode 每步 query 很小，却要反复读取随上下文增长的 K/V cache（视频 01:16:59–01:19:36）。*
+![slide-060：增量解码的算术强度不佳](assets/slides/slide-060.jpg)
+
+这一页给出 decode 的成本核算：增量场景下总算术运算仍是 $O(bnd^2)$，但总内存访问变为 $O(bn^2d+nd^2)$——$bn^2d$ 一项来自反复读取随上下文增长的 K/V cache，$nd^2$ 来自投影权重。算术强度退化为 $O\!\left(\left(\frac{n}{d}+\frac{1}{b}\right)^{-1}\right)$："不佳——需要大 batch、短序列（$n$）或大模型维度（$d$）才能救回来"。课件最后点出关键障碍并引出下文：有没有办法绕过？$n/d$ 这一项很难降低——序列长度由应用决定、模型维度由质量决定，于是下一页的答案不是动 $n$ 或 $d$，而是动 K/V 的**头数**：MQA/GQA 正是把 $bn^2d$ 项中的 $d$ 换成 $d_{kv}$ 来直接削减内存访问。
 
 > [!WARNING]
 > **KV cache 缓存的是 K 和 V，不是 Q，也不是 QK attention matrix。** Q 只服务当前生成步，attention score 每步根据当前 Q 与历史 K 重新计算。课堂动画/口述在这里容易造成误解，正文采用标准实现解释。
@@ -1572,9 +1596,6 @@ $$
 
 课件给出 MQA 的核心思想：保留多个 query，但 key 和 value 只保留一份——进出显存的数据（KV cache）因此大幅减少。这一页给出定量结果：总访存降为 $O(bnd+bn^2k+nd^2)$ 量级，算术强度变为 $O(1/d+n/(dh)+1/b)^{-1}$，困扰上一页的 $n/d$ 项被缩小为 $n/(dh)$。配图出自 Fireworks AI 的博客。再次提醒：“one dimension”指一个共享 KV head，$d_h$ 并未坍缩（见上方 WARNING）。
 
-![视频中的 MHA、GQA 与 MQA 对照](assets/video-mha-gqa-mqa.jpg)
-*图 26：从每个 Q head 独享 K/V，过渡到分组共享，再到全共享（视频 01:20:49–01:21:59）。*
-
 ![slide-062：进一步的扩展——GQA 与 MLA](assets/slides/slide-062.jpg)
 
 这一页把 MQA 的极端做法回调为连续旋钮：不必一路减到一份 KV，而是保留较少的若干份——key-query 比例成为同时控制表达力与推理效率的简单旋钮。课件还提到更近期的 MLA（multi-head latent attention，出自 DeepSeek-V2），把 KV 压缩思路推进到低秩潜空间，属于同一思想谱系的延伸。
@@ -1628,8 +1649,9 @@ def repeat_kv(kv: torch.Tensor, g: int) -> torch.Tensor:
 
 `expand` 不产生拷贝（stride 为 0 的视图），`reshape` 通常也共享存储；因此 GQA 的“复制”在显存上是免费的，真正读入 cache 的仍只有 $H_{kv}$ 份数据——这正对应上面的带宽结论。生产内核（FlashAttention 及各路 decode kernel）则直接在寻址时按 $h_q \mapsto h_q/g$ 映射到对应 KV head，连视图都不必建。
 
-![MQA/GQA 的质量与延迟结果](assets/mqa-gqa-quality-latency.jpg)
-*图 27：GQA 常取得接近 MHA 的质量和接近 MQA 的服务收益，但差异并非恒为零（视频 01:21:59–01:23:14）。*
+![slide-063：MQA 会损害质量吗——有时会](assets/slides/slide-063.jpg)
+
+这一页给出 MQA/GQA 的质量与速度证据。左表（Shazeer 2019，Billion-Word 基准）：8 头 multi-head 的 dev-PPL 为 29.9，multi-query 为 30.2——MQA 只有很小的 PPL 损失；作为对照，把头数砍到 1（$d_k=128$）反而劣化到 31.2，说明损失来自共享 K/V 而非头数本身。右上图（Ainslie 2023）：以每样本耗时为横轴、性能为纵轴，GQA-XXL 几乎追平 MHA-XXL 的性能却快得多，MQA-XXL 居中——GQA 质量损失很低甚至为零。右下图：随 GQA 分组数从 1 增到 64，每样本时间从 MQA 水平逐渐爬升，组数 32 以后逼近 MHA 的常数线——组数就是速度旋钮。三图合起来支撑正文的结论：GQA 常取得接近 MHA 的质量与接近 MQA 的服务收益，但差异并非恒为零。
 
 图中一个 MQA 结果从约 29.9 变化到 30.2，差距虽小却说明质量并非数学保证。选择 $H_{kv}$ 应结合目标 batch、上下文长度、显存容量和评测，而不能只看架构名称。
 
@@ -1678,8 +1700,9 @@ $$
 
 sparse attention 的目标是让每个 token 只连接一部分位置，例如局部邻域、固定步长或少量全局 token。
 
-![稀疏注意力连接模式](assets/sparse-attention-patterns.jpg)
-*图 28：局部、跨步与全局连接可组合成稀疏模式（视频 01:25:08–01:25:57）。*
+![slide-064：稀疏/滑窗注意力——用结构化稀疏交换表达力与运行时间](assets/slides/slide-064.jpg)
+
+这一页从全注意力的二次成本出发，介绍稀疏/结构化注意力（GPT-3、GPT-OSS、Gemma 4 均有使用，图出自 Child et al. 2019）。下方三张连接矩阵对照：(a) 标准 Transformer 的完整因果下三角；(b) Sparse Transformer 的 strided 模式——每个位置只看固定步长的局部行与跨步列；(c) fixed 模式——局部块加周期性全局列。上方小图画出单行/单列的连接形状。这类模式的本质是在表达力与运行时间之间做结构化交换：局部连接负责邻近依赖，少量全局/跨步连接维持远距离信息通路，把每 token 的连接数从 $O(n)$ 压到 $O(\sqrt{n})$ 或 $O(\log n)$ 量级。正文接下来取其中最简单的一种（sliding window）展开量级推导。
 
 最简单的 sliding-window attention（SWA）只看最近 $w$ 个 token，连接数从二次降为线性量级：
 
@@ -1721,9 +1744,6 @@ $$
 
 课件称交错结构为“当前标准技巧”：以 Cohere Command A 为例，每第 4 层是一次 full attention；长程信息靠 NoPE 传递，短程信息靠 RoPE + SWA 处理。其他采用者包括 LLaMA 4、Gemma 3、Gemma 4，OLMo 3 则采用 SWA + 全程 RoPE 的变体。下文对“局部 RoPE + 全局 NoPE”组合的自洽性给出了机制解释。
 
-![视频中的局部—全局交错结构](assets/video-interleaved-attention.jpg)
-*图 29：示例每四层插入一层 full attention，其余使用 sliding-window attention（视频 01:25:57–01:27:13）。*
-
 若每 $r$ 层中有一层 full attention，粗略量级为：
 
 $$
@@ -1745,8 +1765,9 @@ $$
 
 代入具体数字感受折中的力度。设 $L=32$，$r=8$（每 8 层 1 层 full，即 4 层 full、28 层 SWA），$n=131072$，$w=4096$，head 因子 $d_hH_q$ 作为公共项省略：局部项约 $28\times 1.31\times10^5\times 4096\approx 1.50\times10^{10}$，全局项约 $4\times (1.31\times10^5)^2\approx 6.87\times10^{10}$——即使只有八分之一的层是 full attention，二次项仍贡献了总注意力成本的约 82%。结论：混合架构的成本大头在 full 层，继续压低 $r$ 的边际收益递减，而增大 $w$ 对局部项是线性的。这解释了为什么近期模型倾向用**较小窗口 + 稀疏全局层**的组合，而不是大窗口。
 
-![近期模型中的混合注意力配方](assets/recent-hybrid-attention.jpg)
-*图 30：公开模型采用不同的 full/local 比例、位置编码和窗口方案（视频 01:27:13–01:28:38）。*
+![slide-066：近期模型的其他交错注意力实例](assets/slides/slide-066.jpg)
+
+这一页并列三个最新例子，展示"局部—全局交错"在 2025 年的多样化实现。Gemma 4（左图，引自 Maarten Grootendorst 的可视化指南）：多层 Local Attention（sliding window）与 Global Attention 交错，最后一层始终是全局注意力，并配 p-RoPE 提供位置信息。Olmo 3（中表）：滑窗注意力用于 3/4 的层、窗口 4096 token，全局注意力层上用 YaRN 做 RoPE scaling（$\theta=5\cdot10^5$），同时配 z-loss（权重 $10^{-5}$）、gradient clipping 1.0、不对 embedding 做 weight decay、LayerNorm 只加在输出端——把本讲多个稳定与位置技巧叠在了一起。Qwen 3.5/Qwen 3 Next（右图）：以 3:1 比例混合 Gated DeltaNet（线性注意力/Delta Rule，q/k 经 L2 归一化）与 Gated Attention（带 partial RoPE 与输出门控），配 MoE 与 Zero-Centered RMSNorm——交错思想已扩展到"全局注意力层 + 线性注意力层"的混合。三个例子再次印证正文的三旋钮观点：哪些层全局、窗口多大、位置编码作用在哪些层，每家答案都不同。
 
 课件以 Command A 等模型说明：局部层可配 RoPE 以表达短程相对位置，全局层有时使用 NoPE；其他公开模型则采用 full RoPE。这里最重要的不是背某个版本列表，而是理解三个独立旋钮：**哪些层全局、窗口多大、位置编码作用在哪些层。** 模型版本更新很快，表格应视作授课时点的快照。
 
@@ -1849,5 +1870,4 @@ $$
 - 把架构组件映射到具体瓶颈，才能避免无目的堆叠技巧。
 - 默认配方适合作为实验起点，不可替代预算公平的消融和目标负载测试。
 - 模型、优化器和硬件共同决定最终系统；架构研究本质上也是系统研究。
-
 

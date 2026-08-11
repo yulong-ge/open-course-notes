@@ -32,7 +32,7 @@
 
 ### 1.2 Softmax attention 到底算了什么
 
-先固定一个 query 位置 `t`。它与每个 key 位置 `s` 做缩放内积，加入 causal mask，再沿 **key 位置这一维** 做 softmax；最后用所得概率加权 values：
+先固定一个 query 位置 $t$。它与每个 key 位置 $s$ 做缩放内积，加入 causal mask，再沿 **key 位置这一维** 做 softmax；最后用所得概率加权 values：
 
 $$
 \begin{aligned}
@@ -43,23 +43,23 @@ y_t=\sum_{s=1}^{n}a_{t,s}v_s.
 \end{aligned}
 $$
 
-- `t`：当前 query 的位置。
-- `s,r`：被读取的 key/value 位置索引。
-- `n`：序列长度。
-- `q_t`：位置 `t` 的 query 向量。
-- `k_s`：位置 `s` 的 key 向量。
-- `v_s`：位置 `s` 的 value 向量。
-- `d_k`：query/key 维度；平方根缩放用于控制 logit 尺度。
-- `m_{t,s}`：causal mask；未来位置取负无穷。
-- `z_{t,s}`：加入缩放与 mask 后的 attention logit。
-- `a_{t,s}`：位置 `t` 分给位置 `s` 的 attention 权重。
-- `y_t`：位置 `t` 聚合后的 attention 输出。
-- `exp`：指数函数。
-- `T`：向量转置。
+- $t$：当前 query 的位置。
+- $s,r$：被读取的 key/value 位置索引。
+- $n$：序列长度。
+- $q_t$：位置 $t$ 的 query 向量。
+- $k_s$：位置 $s$ 的 key 向量。
+- $v_s$：位置 $s$ 的 value 向量。
+- $d_k$：query/key 维度；平方根缩放用于控制 logit 尺度。
+- $m_{t,s}$：causal mask；未来位置取负无穷。
+- $z_{t,s}$：加入缩放与 mask 后的 attention logit。
+- $a_{t,s}$：位置 $t$ 分给位置 $s$ 的 attention 权重。
+- $y_t$：位置 $t$ 聚合后的 attention 输出。
+- $\exp$：指数函数。
+- $T$：向量转置。
 
 为什么要除以 $\sqrt{d_k}$？若 $q$ 与 $k$ 的各分量近似独立、均值为零、方差为一，则内积 $q^\top k=\sum_{i=1}^{d_k}q_ik_i$ 的方差约为 $d_k$，即 logits 的量级随 $\sqrt{d_k}$ 增长。量纲过大的 logits 会把 softmax 推入饱和区：最大项对应的梯度趋于零，训练信号消失。除以 $\sqrt{d_k}$ 把 logits 的标准差拉回 $O(1)$ 量级，使 softmax 工作在梯度敏感区间。这个缩放不改变任何渐近复杂度，但对优化稳定性至关重要。
 
-做一个可手算的例子。假设序列有 3 个位置，当前 query 位于 `t=2`；即使未来位置 3 的原始 logit 高达 99，causal mask 也会把它完全排除：
+做一个可手算的例子。假设序列有 3 个位置，当前 query 位于 $t=2$；即使未来位置 3 的原始 logit 高达 99，causal mask 也会把它完全排除：
 
 $$
 \begin{aligned}
@@ -69,17 +69,17 @@ a_{2,:}&=\operatorname{softmax}(z_{2,:})\approx[0.269,0.731,0],\\
 \end{aligned}
 $$
 
-- `z_{2,:}`：query 2 对全部三个 key 位置的 masked logits。
-- `a_{2,:}`：沿 key 位置维归一化后的权重，三项之和为 1。
-- `v_1,v_2,v_3`：为便于手算而设为标量的三个 values。
-- `y_2`：query 2 的加权输出。
-- `softmax`：对同一个 query 的全部允许 key logits 做指数归一化。
-- `∞`：无穷大；`exp(-∞)=0`。
-- `≈`：数值近似。
+- $z_{2,:}$：query 2 对全部三个 key 位置的 masked logits。
+- $a_{2,:}$：沿 key 位置维归一化后的权重，三项之和为 1。
+- $v_1,v_2,v_3$：为便于手算而设为标量的三个 values。
+- $y_2$：query 2 的加权输出。
+- $\operator{softmax}$：对同一个 query 的全部允许 key logits 做指数归一化。
+- $\infty$：无穷大；$\exp(-\infty)=0$。
+- $\approx$：数值近似。
 
 验算一下 softmax 数值：$\exp(1)\approx2.718$，$\exp(2)\approx7.389$，$\exp(-\infty)=0$，归一化常数为 $2.718+7.389=10.107$，于是 $a_{2,1}=2.718/10.107\approx0.269$，$a_{2,2}=7.389/10.107\approx0.731$，权重之和恰为 1。输出 $y_2=0.269\times10+0.731\times0=2.69$，与上式一致。
 
-在实际多头实现中，attention logits 常写成 `[B,H,T_q,T_k]`；softmax 沿最后的 `T_k` 维执行。它不会跨 batch、head 或不同 query 相互归一化。训练时 causal mask 阻止看到未来 token；自回归推理时，KV cache 中本来就只有已经生成的历史位置，因此 mask 在推理时通常是隐含的而非显式构造的。
+在实际多头实现中，attention logits 常写成 $[B,H,T_q,T_k]$；softmax 沿最后的 $T_k$ 维执行。它不会跨 batch、head 或不同 query 相互归一化。训练时 causal mask 阻止看到未来 token；自回归推理时，KV cache 中本来就只有已经生成的历史位置，因此 mask 在推理时通常是隐含的而非显式构造的。
 
 > [!IMPORTANT]
 > softmax 同时做两件事：把 logits 变成非负且和为 1 的读取权重，并让每个 query 的权重依赖同一行全部 keys。后一个全局耦合正是简单结合律不能直接穿过 softmax 的原因——归一化分母把所有 key 位置纠缠在一起，先算哪一对乘法都会丢失这个分母。
@@ -130,18 +130,18 @@ $$
 
 ### 1.3 长上下文首先是系统问题
 
-标准自注意力让每个 query 与所有历史 key 比较。序列长度从 `n` 增长到 `2n` 时，注意力矩阵面积约增至四倍；KV cache、显存带宽和 kernel 调度也随之变成瓶颈。长上下文并不只是“把 position embedding 拉长”，而是要重新安排：
+标准自注意力让每个 query 与所有历史 key 比较。序列长度从 $n$ 增长到 $2n$ 时，注意力矩阵面积约增至四倍；KV cache、显存带宽和 kernel 调度也随之变成瓶颈。长上下文并不只是“把 position embedding 拉长”，而是要重新安排：
 
 - 哪些历史 token 值得被读取；
 - 是否必须保留所有历史 token 的显式表示；
 - 训练时的并行性与推理时的逐 token 延迟如何兼顾；
 - 理论 FLOPs 的改善能否转化成真实硬件收益。
 
-![上下文长度增长带来的 attention 成本](assets/attention-cost.jpg)
+![slide-002：上下文长度增长带来的 attention 成本](assets/slides/slide-002.jpg)
 
-*图：上下文窗口与 attention/FFN 成本的增长趋势。官方课件第 2 页；视频对应讲解区间：`00:01:35--00:02:49`。*
+*视频对应讲解区间：`00:01:35--00:02:49`。* 本页（课件第 2 页）给出随上下文窗口拉长，attention 成本曲线相对近似线性增长的 FFN 成本急剧上翘的对比图。讲者用它立起全讲的问题意识——当上下文从数千走向数十万乃至数百万 tokens，二次项会吞噬掉其他所有计算预算，必须在算法层面而非仅在工程层面给出回应。
 
-讲者先给出两个直观基线。**局部 attention** 只看固定窗口，成本可控但可能漏掉远距离依赖；**少量全局层 + 大量局部层** 能恢复部分长程信息，却仍需要为“哪些层做全局”付出架构和系统复杂度。**FlashAttention** 则通过避免显式物化巨大 attention matrix、重排计算并减少显存搬运，能获得显著的常数项收益，却没有消除 `n²`。当目标走向数百万 tokens 时，课程因此继续追问：能否改变 attention 本身的计算形态？
+讲者先给出两个直观基线。**局部 attention** 只看固定窗口，成本可控但可能漏掉远距离依赖；**少量全局层 + 大量局部层** 能恢复部分长程信息，却仍需要为“哪些层做全局”付出架构和系统复杂度。**FlashAttention** 则通过避免显式物化巨大 attention matrix、重排计算并减少显存搬运，能获得显著的常数项收益，却没有消除 $n^2$。当目标走向数百万 tokens 时，课程因此继续追问：能否改变 attention 本身的计算形态？
 
 ![slide-003：基础工具箱——局部/全局混合与 FlashAttention 的系统优化](assets/slides/slide-003.jpg)
 
@@ -181,7 +181,7 @@ $$
 
 ### 2.1 先移除无法交换的非线性
 
-标准 attention 先形成 `QK^T`，再对权重施加 `ρ`（通常是 softmax），最后与 `V` 相乘。若 `ρ` 是恒等映射，矩阵乘法结合律允许先算 `K^T V`，避免显式构造 `n×n` 矩阵：
+标准 attention 先形成 $QK^T$，再对权重施加 $\rho$（通常是 softmax），最后与 $V$ 相乘。若 $\rho$ 是恒等映射，矩阵乘法结合律允许先算 $K^T V$，避免显式构造 $n\times n$ 矩阵：
 
 $$
 \begin{aligned}
@@ -191,16 +191,16 @@ Q&\in\mathbb{R}^{n\times d_k},\quad K\in\mathbb{R}^{n\times d_k},\quad V\in\math
 \end{aligned}
 $$
 
-- `n`：序列长度。
-- `d_k`：query/key 维度。
-- `d_v`：value 维度。
-- `Q`：所有位置的 query 矩阵。
-- `K`：所有位置的 key 矩阵。
-- `V`：所有位置的 value 矩阵。
-- `ρ`：施加在 attention logits 或 weights 上的变换。
-- `Id`：恒等映射。
-- `T`：矩阵转置。
-- `Attn`：attention 运算。
+- $n$：序列长度。
+- $d_k$：query/key 维度。
+- $d_v$：value 维度。
+- $Q$：所有位置的 query 矩阵。
+- $K$：所有位置的 key 矩阵。
+- $V$：所有位置的 value 矩阵。
+- $\rho$：施加在 attention logits 或 weights 上的变换。
+- $\operator{Id}$：恒等映射。
+- $T$：矩阵转置。
+- $\operator{Attn}$：attention 运算。
 
 我们把两种结合顺序的乘加次数逐项算出。左结合（标准顺序）：先算 $QK^\top$，这是 $n^2d_k$ 次乘加；再用结果左乘 $V$，这是 $n^2d_v$ 次乘加，合计
 
@@ -232,12 +232,12 @@ $$
 
 还要补一句因果性带来的细节：上面的右结合计数对非因果（双向）序列精确成立；对因果序列，位置 $t$ 只应读取 $s\le t$ 的历史，朴素地对整段序列先算 $K^\top V$ 会把未来信息泄漏给过去位置。正确做法是按时间分块（chunkwise）：块内用矩阵并行、块间用状态递推，复杂度仍是 $O(nd^2)$ 量级，只是常数略增。Mamba-2 的 SSD 算法正是这一思想的系统化。
 
-![线性 attention 的结合律改写](assets/linear-attention.jpg)
+![slide-004：线性 attention 的结合律改写](assets/slides/slide-004.jpg)
 
-*图：从 `(QK^T)V` 改写为 `Q(K^T V)` 及两种成本。官方课件第 4 页；视频对应讲解区间：`00:05:47--00:08:04`。*
+*视频对应讲解区间：`00:05:47--00:08:04`。* 本页（课件第 4 页）是上述推导的课件原页：上方写出一般形式 $\operatorname{Attn}(Q,K,V)=\rho(QK^\top)V$，下方对照两种结合顺序的代价——左结合须物化 $n\times n$ 的 logits 矩阵，右结合只产生 $d\times d$ 的 $K^\top V$。注意本页同样标注了前提：$\rho$ 取恒等映射时结合律才成立，这正是把 softmax 换成特征映射 $\phi$ 的动机所在。
 
 > [!WARNING]
-> 这里最关键的隐藏条件是 `ρ` 必须允许这种分解。softmax 不能直接“穿过”结合律：分母 $\sum_r\exp(z_{t,r})$ 把同一行的所有 key 位置耦合在一起，任何先压缩历史的做法都无法事后还原这个分母。因此从 softmax attention 改成纯线性 attention 是有损的架构改变，不是等价加速。
+> 这里最关键的隐藏条件是 $\rho$ 必须允许这种分解。softmax 不能直接“穿过”结合律：分母 $\sum_r\exp(z_{t,r})$ 把同一行的所有 key 位置耦合在一起，任何先压缩历史的做法都无法事后还原这个分母。因此从 softmax attention 改成纯线性 attention 是有损的架构改变，不是等价加速。
 
 #### 特征映射 $\phi$：让“线性化”尽量逼近 softmax
 
@@ -255,8 +255,8 @@ $$
 
 - $y_t$：位置 $t$ 的输出。
 - $\phi(\cdot)$：逐维非负的特征映射。
-- $q_t,k_s$：位置 `t` 的 query 与位置 `s` 的 key。
-- $v_s$：位置 `s` 的 value。
+- $q_t,k_s$：位置 $t$ 的 query 与位置 $s$ 的 key。
+- $v_s$：位置 $s$ 的 value。
 - 分子：特征空间中 key-value 外积的加权和。
 - 分母：归一化项，对应 softmax 分母的线性近似；许多现代线性 attention 变体直接省略它。
 
@@ -264,21 +264,21 @@ $$
 
 ### 2.2 同一运算可以写成 RNN
 
-对因果序列逐位置展开，`K^T V` 就是历史 key-value 外积的累计状态。带上特征映射，递推形式为
+对因果序列逐位置展开，$K^T V$ 就是历史 key-value 外积的累计状态。带上特征映射，递推形式为
 
 $$
 S_t=S_{t-1}+\phi(k_t)v_t^\top,\qquad y_t=\phi(q_t)^\top S_t.
 $$
 
-- `t`：当前位置。
-- `k_t`：当前位置的 key 向量。
-- `v_t`：当前位置的 value 向量。
-- `q_t`：当前位置的 query 向量。
-- `S_t`：截至位置 `t` 的累计 key-value 状态，形状约为 `d_k×d_v`。
-- `S_{t-1}`：上一位置的累计状态。
-- `y_t`：当前位置输出。
-- `T`：向量转置。
-- `φ(·)`：逐维非负的特征映射（为简洁也常省略不写）。
+- $t$：当前位置。
+- $k_t$：当前位置的 key 向量。
+- $v_t$：当前位置的 value 向量。
+- $q_t$：当前位置的 query 向量。
+- $S_t$：截至位置 $t$ 的累计 key-value 状态，形状约为 $d_k\times d_v$。
+- $S_{t-1}$：上一位置的累计状态。
+- $y_t$：当前位置输出。
+- $T$：向量转置。
+- $\phi(\cdot)$：逐维非负的特征映射（为简洁也常省略不写）。
 
 我们严格证明递推形式与并行形式代数等价。对 $t$ 做数学归纳：基例 $S_0=0$。归纳假设 $S_{t-1}=\sum_{s=1}^{t-1}\phi(k_s)v_s^\top$，则
 
@@ -294,9 +294,9 @@ $$
 
 即 $y_t$ 的第 $j$ 个分量为 $\sum_{s\le t}\bigl(\phi(q_t)^\top\phi(k_s)\bigr)(v_s)_j$——这正是因果线性 attention 并行形式的逐元素写法，两者**逐项相等，没有任何近似**。
 
-![线性 attention 的循环形式](assets/recurrent-linear-attention.jpg)
+![slide-005：线性 attention 的循环形式](assets/slides/slide-005.jpg)
 
-*图：parallel form 与 recurrent form 的精确对应。官方课件第 5 页；视频对应讲解区间：`00:08:04--00:09:49`。*
+*视频对应讲解区间：`00:08:04--00:09:49`。* 本页（课件第 5 页）给出 parallel form 与 recurrent form 的并排对照：左栏是整段序列一次矩阵乘的训练形态，右栏是逐步更新状态 $S_t$、逐步读出 $y_t$ 的推理形态。课件在此强调的核心事实与本讲义上方归纳法证明一致——这两种形态是**同一代数对象的两种计算调度**，不是两个近似程度不同的模型。
 
 这产生一个极有价值的 duality：训练时可以用并行矩阵形式吞吐整段序列（充分利用 GPU 的大矩阵乘吞吐），推理时用串行 recurrence，只维护固定大小状态——无论上下文已经多长，每生成一个 token 的计算与显存都是 $O(d_kd_v)$ 的常数。课堂问答专门澄清了两种“损失”不能混为一谈：
 
@@ -362,17 +362,17 @@ y_t=q_t^\top S_t+v_t^\top D,\qquad
 \gamma_t=f(x_t).
 $$
 
-- `S_t`：当前位置更新后的状态。
-- `S_{t-1}`：上一位置状态。
-- `γ_t`：由当前输入决定的状态保留/衰减门。
-- `k_t`：当前位置 key。
-- `v_t`：当前位置 value。
-- `q_t`：当前位置 query。
-- `y_t`：当前位置输出。
-- `D`：直接或 skip 路径参数。
-- `x_t`：当前位置输入。
-- `f`：把输入映射为门值的函数。
-- `T`：向量转置。
+- $S_t$：当前位置更新后的状态。
+- $S_{t-1}$：上一位置状态。
+- $\gamma_t$：由当前输入决定的状态保留/衰减门。
+- $k_t$：当前位置 key。
+- $v_t$：当前位置 value。
+- $q_t$：当前位置 query。
+- $y_t$：当前位置输出。
+- $D$：直接或 skip 路径参数。
+- $x_t$：当前位置输入。
+- $f$：把输入映射为门值的函数。
+- $T$：向量转置。
 
 把递推展开几步，可以看清衰减门的作用。设 $S_0=0$，则
 
@@ -380,18 +380,18 @@ $$
 S_t=\sum_{s=1}^{t}\Bigl(\prod_{r=s+1}^{t}\gamma_r\Bigr)k_sv_s^\top,
 $$
 
-- $\prod_{r=s+1}^{t}\gamma_r$：位置 `s` 的写入在到达位置 `t` 之前经历的累计衰减。
+- $\prod_{r=s+1}^{t}\gamma_r$：位置 $s$ 的写入在到达位置 $t$ 之前经历的累计衰减。
 
 也就是说，每条历史写入都乘上了一个随距离指数衰减（若 $\gamma_r<1$）的权重。与纯累加相比，模型获得了“遗忘”的能力；与固定的指数衰减相比，$\gamma_t$ 由输入决定，模型可以**选择性地**记住某些内容（在这些区间令 $\gamma$ 接近 1）而快速遗忘另一些内容。这正是 SSM 文献中“selection mechanism”的几何含义。
 
-![Mamba-2 的门控状态视角](assets/mamba2-gating.jpg)
+![slide-007：Mamba-2 的门控状态视角](assets/slides/slide-007.jpg)
 
-*图：从 linear attention 到带衰减门与 skip path 的 Mamba-2 简化式。官方课件第 7 页；视频对应讲解区间：`00:11:11--00:13:25`。*
+*视频对应讲解区间：`00:11:11--00:13:25`。* 本页（课件第 7 页）是 Mamba-2 简化式的课件原页：在 linear attention 的 $S_t=S_{t-1}+k_tv_t^\top$ 上加入输入相关的标量衰减 $\gamma_t$ 与直接通路 $v_t^\top D$。课件特意把它写成与线性 attention 逐项对照的形式，让读者看到：Mamba 类模型的全部新意都集中在“历史以什么权重留存”这一乘法因子上，而状态形状与读取方式原封不动。
 
 > [!NOTE]
 > 这不是完整 Mamba-2 block。实际模型还包含 projection、卷积、规范化和更具体的 SSM 参数化（如对角状态矩阵、SSD 分块结构）；课程这里只保留与 linear attention 对照所需的状态更新骨架。把这个简化式当作理解入口，而不是实现蓝本。
 
-课堂提问还指出 `v_t^T D` 看似绕过状态。讲者的回答是：它给当前输入一条直接的局部通路，状态负责跨位置记忆，两者承担不同职责。从梯度的角度看，skip 路径还为深层堆叠提供了一条不受门控衰减影响的信号通道，缓解了长链乘积带来的梯度消失。
+课堂提问还指出 $v_t^T D$ 看似绕过状态。讲者的回答是：它给当前输入一条直接的局部通路，状态负责跨位置记忆，两者承担不同职责。从梯度的角度看，skip 路径还为深层堆叠提供了一条不受门控衰减影响的信号通道，缓解了长链乘积带来的梯度消失。
 
 ![slide-008：Nemotron 3——Mamba-2 混合架构的准确率与吞吐](assets/slides/slide-008.jpg)
 
@@ -408,19 +408,19 @@ y_t&=q_t^\top S_t,\qquad \gamma_t=f_\gamma(x_t),\quad \beta_t=f_\beta(x_t).
 \end{aligned}
 $$
 
-- `S_t`：更新后的状态，`S_t∈R^{d_k×d_v}`。
-- `S_{t-1}`：旧状态，形状同样是 `d_k×d_v`。
-- `I`：`d_k×d_k` 单位矩阵。
-- `β_t`：输入相关的写入/擦除门；为零时不写入。
-- `k_tk_t^T`：当前 key 方向的外积。
-- `γ_t`：旧状态整体保留门。
-- `k_t`：当前 key，按 `d_k×1` 列向量理解。
-- `v_t`：当前 value，按 `d_v×1` 列向量理解。
-- `q_t`：当前 query，按 `d_k×1` 列向量理解。
-- `y_t`：当前位置输出，形状为 `d_v×1`；公式中的 `q_t^T S_t` 横向写作 `1×d_v`。
-- `x_t`：当前位置输入。
-- `f_γ,f_β`：生成两个门值的输入相关函数。
-- `T`：向量转置。
+- $S_t$：更新后的状态，$S_t\in\mathbb{R}^{d_k\times d_v}$。
+- $S_{t-1}$：旧状态，形状同样是 $d_k\times d_v$。
+- $I$：$d_k\times d_k$ 单位矩阵。
+- $\beta_t$：输入相关的写入/擦除门；为零时不写入。
+- $k_tk_t^T$：当前 key 方向的外积。
+- $\gamma_t$：旧状态整体保留门。
+- $k_t$：当前 key，按 $d_k\times 1$ 列向量理解。
+- $v_t$：当前 value，按 $d_v\times 1$ 列向量理解。
+- $q_t$：当前 query，按 $d_k\times 1$ 列向量理解。
+- $y_t$：当前位置输出，形状为 $d_v\times 1$；公式中的 $q_t^T S_t$ 横向写作 $1\times d_v$。
+- $x_t$：当前位置输入。
+- $f_\gamma,f_\beta$：生成两个门值的输入相关函数。
+- $T$：向量转置。
 
 #### 擦除算子的几何意义
 
@@ -469,22 +469,22 @@ assert torch.allclose(new_read, expected, atol=1e-5)
 
 | 表达式 | 形状 | 检查结果 |
 |---|---:|---|
-| `S_{t-1}`、`S_t` | `d_k×d_v` | 状态以 key 维为行、value 维为列 |
-| `k_t`、`q_t` | `d_k×1` | 两者都是列向量 |
-| `v_t` | `d_v×1` | value 列向量 |
-| `I`、`k_tk_t^T` | `d_k×d_k` | 二者可做减法 |
-| `(I-β_tk_tk_t^T)S_{t-1}` | `(d_k×d_k)(d_k×d_v)=d_k×d_v` | 擦除项仍是状态形状 |
-| `k_tv_t^T` | `(d_k×1)(1×d_v)=d_k×d_v` | 写入项也是状态形状 |
-| `q_t^T S_t` | `(1×d_k)(d_k×d_v)=1×d_v` | 得到一个 value 维输出 |
+| $S_{t-1}$、$S_t$ | $d_k\times d_v$ | 状态以 key 维为行、value 维为列 |
+| $k_t$、$q_t$ | $d_k\times 1$ | 两者都是列向量 |
+| $v_t$ | $d_v\times 1$ | value 列向量 |
+| $I$、$k_tk_t^T$ | $d_k\times d_k$ | 二者可做减法 |
+| $(I-\beta_tk_tk_t^T)S_{t-1}$ | $(d_k\times d_k)(d_k\times d_v)=d_k\times d_v$ | 擦除项仍是状态形状 |
+| $k_tv_t^T$ | $(d_k\times 1)(1\times d_v)=d_k\times d_v$ | 写入项也是状态形状 |
+| $q_t^T S_t$ | $(1\times d_k)(d_k\times d_v)=1\times d_v$ | 得到一个 value 维输出 |
 
-所以第一项和第二项都落在 `R^{d_k×d_v}` 中，状态更新维度闭合；最后的 query 读取再把 key 维消掉，留下 value 维。
+所以第一项和第二项都落在 \mathbb{R}^{d_k\times d_v} 中，状态更新维度闭合；最后的 query 读取再把 key 维消掉，留下 value 维。
 
-![Gated Delta Net 的擦除与写入](assets/gated-delta-net.jpg)
+![slide-009：Gated Delta Net 的擦除与写入](assets/slides/slide-009.jpg)
 
-*图：GDN 通过 `I-β_tk_tk_t^T` 擦除当前 key 方向的旧内容。官方课件第 9 页；视频对应讲解区间：`00:15:22--00:18:21`。*
+*视频对应讲解区间：`00:15:22--00:18:21`。* 本页（课件第 9 页）是 GDN 更新式的课件原页：$S_t=\gamma_t(I-\beta_tk_tk_t^\top)S_{t-1}+\beta_tk_tv_t^\top$。课件用色块标出三项的分工——整体保留门 $\gamma_t$、沿 key 方向的擦除算子 $I-\beta_tk_tk_t^\top$、新内容的写入项 $\beta_tk_tv_t^\top$，与上方"先擦后写"的几何推导逐字对应。
 
 > [!WARNING]
-> 只有在额外归一化条件下（$\|k_t\|=1$ 且 $\beta_t=1$），`I-β_tk_tk_t^T` 才能严格解释成正交投影；一般情况下它是“收缩 $k_t$ 方向分量”的线性算子，更稳妥的说法是“沿 key 方向进行可学习擦除”。也不要把它与数值分析中的 Householder 反射混淆——反射会把分量翻转为负，而这里的算子只负责缩减。
+> 只有在额外归一化条件下（$\|k_t\|=1$ 且 $\beta_t=1$），$I-\beta_tk_tk_t^T$ 才能严格解释成正交投影；一般情况下它是“收缩 $k_t$ 方向分量”的线性算子，更稳妥的说法是“沿 key 方向进行可学习擦除”。也不要把它与数值分析中的 Householder 反射混淆——反射会把分量翻转为负，而这里的算子只负责缩减。
 
 ![slide-010：Qwen 3.5 / Qwen Next——3:1 GDN/Attention 混合与平坦的解码曲线](assets/slides/slide-010.jpg)
 
@@ -526,34 +526,34 @@ u_t&=\operatorname{Attn}\!\left(h_t,\{c_s\mid s\in\operatorname{TopK}(I_{t,:},k)
 \end{aligned}
 $$
 
-- `t`：当前 query 位置。
-- `s`：候选历史位置。
-- `I_{t,s}`：位置 `t` 对历史位置 `s` 的索引分数。
-- `H^I`：indexer head 数量。
-- `j`：indexer head 索引。
-- `w^I_{t,j}`：第 `j` 个 indexer head 的权重。
-- `q^I_{t,j}`：第 `j` 个 indexer query。
-- `k^I_s`：历史位置 `s` 的 indexer key。
-- `ReLU`：逐元素非线性。
-- `h_t`：当前 token hidden state。
-- `c_s`：最终 attention 使用的历史 key-value entry。
-- `TopK`：选出最大分数集合的操作。
-- `k`：保留的历史位置数。
-- `u_t`：稀疏 attention 输出。
-- `Attn`：对选中条目执行的精细 attention。
-- `T`：向量转置。
+- $t$：当前 query 位置。
+- $s$：候选历史位置。
+- $I_{t,s}$：位置 $t$ 对历史位置 $s$ 的索引分数。
+- $H^I$：indexer head 数量。
+- $j$：indexer head 索引。
+- $w^I_{t,j}$：第 $j$ 个 indexer head 的权重。
+- $q^I_{t,j}$：第 $j$ 个 indexer query。
+- $k^I_s$：历史位置 $s$ 的 indexer key。
+- $\operator{ReLU}$：逐元素非线性。
+- $h_t$：当前 token hidden state。
+- $c_s$：最终 attention 使用的历史 key-value entry。
+- $\operator{TopK}$：选出最大分数集合的操作。
+- $k$：保留的历史位置数。
+- $u_t$：稀疏 attention 输出。
+- $\operator{Attn}$：对选中条目执行的精细 attention。
+- $T$：向量转置。
 
 注意 indexer 打分与精细 attention 使用**两套不同的表示**：$q^I,k^I$ 是低维、低精度的“检索表示”，只负责回答“这个位置值不值得细看”；$c_s$ 是完整的 KV entry，只在被选中后才参与昂贵的高维 attention。这种“粗筛 + 精读”的两段式结构与信息检索系统中的 recall-rerank 流水线同构。
 
-![DeepSeek Sparse Attention 的 lightning indexer](assets/deepseek-sparse-attention.jpg)
+![slide-012：DeepSeek Sparse Attention 的 lightning indexer](assets/slides/slide-012.jpg)
 
-*图：轻量 indexer 打分、top-k token selection 与精细 attention。官方课件第 12 页；视频对应讲解区间：`00:23:13--00:24:45`。*
+*视频对应讲解区间：`00:23:13--00:24:45`。* 本页（课件第 12 页）是 DSA 两段式结构的课件原页：上方是轻量 lightning indexer 为全部历史位置打分并做 top-k token selection，下方只对选中的少量位置执行完整精细 attention。图中 indexer 与主 attention 使用两套表示的"粗筛 + 精读"分工，正是上方公式 $I_{t,s}$ 与 $u_t$ 的图示化。
 
 ### 4.2 为什么实际会快，但不应误称“严格线性”
 
-课堂追问了一个关键问题：如果 indexer 仍要看全部历史，它不还是全局扫描吗？答案是肯定的。收益来自 indexer 的常数项极小：低维 query/key、少量 heads、ReLU、FP8 等；真正昂贵的 value 聚合只发生在 `k` 个选中位置上。
+课堂追问了一个关键问题：如果 indexer 仍要看全部历史，它不还是全局扫描吗？答案是肯定的。收益来自 indexer 的常数项极小：低维 query/key、少量 heads、ReLU、FP8 等；真正昂贵的 value 聚合只发生在 $k$ 个选中位置上。
 
-对长度 `n` 的整段训练，可用近似分解理解成本：indexer 仍可能达到 `O(n²d_I)`，随后精细 attention 约为 `O(nkd)`。若把选出的 `k` 个 token 当作独立 self-attention 子问题，则会看到 `O(k²d)`。因此不能简单写成“DSA 已变成线性时间”。
+对长度 $n$ 的整段训练，可用近似分解理解成本：indexer 仍可能达到 $O(n^2d_I)$，随后精细 attention 约为 $O(nkd)$。若把选出的 $k$ 个 token 当作独立 self-attention 子问题，则会看到 $O(k^2d)$。因此不能简单写成“DSA 已变成线性时间”。
 
 我们把三项摆在一起定量比较（每 token、忽略常数）：
 
@@ -583,7 +583,7 @@ DSA 的另一吸引力是可以在 dense 短上下文预训练之后，增加 in
 ### 本章小结
 
 - DSA 用轻量 indexer 选出历史 top-k，再执行标准 attention；粗筛与精读使用两套表示。
-- 它仍有全局索引成本，实际优势依赖低维、低精度和较小 `k`；其收益是常数项与斜率，不是新的渐近类别。
+- 它仍有全局索引成本，实际优势依赖低维、低精度和较小 $k$；其收益是常数项与斜率，不是新的渐近类别。
 - 与固定状态模型相比，DSA 用更多显式 memory 换取更精确的长程回看能力。
 - indexer 可 post-hoc 接入已有 dense 模型，使长上下文扩展不必从头预训练。
 
@@ -597,9 +597,9 @@ DSA 的另一吸引力是可以在 dense 短上下文预训练之后，增加 in
 
 Transformer 中大量参数和 FLOPs 位于 FFN。以标准的扩张四倍配置为例：模型维度 $d$、FFN 隐层 $4d$，两个线性层共有 $2\times d\times4d=8d^2$ 个参数，而单头维度合并后的 attention 投影约为 $4d^2$——FFN 占了约三分之二的参数与计算。MoE 把一个大 FFN 换成多个 expert FFN，并让 router 对每个 token 只选择少数 experts。于是模型的 **total parameters** 可以远大于 **active parameters**。
 
-![Dense FFN 与 Sparse MoE FFN](assets/moe-definition.jpg)
+![slide-015：Dense FFN 与 Sparse MoE FFN 的对照](assets/slides/slide-015.jpg)
 
-*图：稠密模型与带 selector 的 sparse expert layer。官方课件第 15 页；视频对应讲解区间：`00:35:27--00:36:57`。*
+*视频对应讲解区间：`00:35:27--00:36:57`。* 本页（课件第 15 页）是 MoE 定义的课件原页：左侧稠密模型中每个 token 都经过同一个大 FFN；右侧 sparse expert layer 中 router/selector 按 token 选择少数 experts，其余 experts 不参与本次计算。这张图同时标出了 total 与 active parameters 的分野——选择器之后的参数总量可以任意大，但每个 token 实际支付的计算只覆盖被选中的那一小部分。
 
 例如课程引用 Qwen1.5-MoE：约 14.3B total parameters，但每个 token 只激活约 2.7B。比较模型时必须说明是哪种口径；只写一个“参数量”会产生严重误导。三个口径各自回答不同的问题：
 
@@ -613,9 +613,9 @@ Transformer 中大量参数和 FLOPs 位于 FFN。以标准的扩张四倍配置
 
 在固定 active FLOPs 下，增加 experts 往往能改善训练 loss：不同 tokens 可调用不同子网络，参数容量增大而每个 token 的矩阵乘法量近似不变。直觉上，这相当于把一个大函数族拆成许多专门化的小函数，让每个 token 只为自己需要的那部分功能付费；语言数据本身高度异质（代码、数学、对话、多语种），稀疏激活让模型能为异质子分布分别分配容量，而不必让所有知识挤在同一组权重里互相干扰。
 
-![固定计算下增加专家的经验收益](assets/moe-scaling.jpg)
+![slide-016：固定计算下增加专家的经验收益](assets/slides/slide-016.jpg)
 
-*图：相近 active compute 下，更多 total parameters 带来更好训练曲线的经验结果。官方课件第 16 页；视频对应讲解区间：`00:36:57--00:38:18`。*
+*视频对应讲解区间：`00:36:57--00:38:18`。* 本页（课件第 16 页）给出相近 active compute 下增加 total parameters 的经验训练曲线：expert 数更多的配置在相同每 token 计算预算下达到更低 loss。这是"active-compute 视角 free win"的直接证据，但注意曲线横轴是 active FLOPs 而非总成本——存储、通信与训练更新成本并未计入这张图。
 
 ![slide-017：MoE 训练更快的证据——Switch 与 OLMoE](assets/slides/slide-017.jpg)
 
@@ -631,9 +631,9 @@ Transformer 中大量参数和 FLOPs 位于 FFN。以标准的扩张四倍配置
 
 把不同 experts 放在不同设备上，可获得额外的 expert parallelism。一次 MoE 层通常包括：router 打分 → token dispatch → 各设备 expert 计算 → token combine。网络拓扑和跨机带宽因此决定真实吞吐。
 
-![MoE 的 expert parallelism](assets/expert-parallelism.jpg)
+![slide-019：MoE 的 expert parallelism](assets/slides/slide-019.jpg)
 
-*图：不同 experts 分布到设备后形成的新并行维度。官方课件第 19 页；视频对应讲解区间：`00:39:50--00:40:42`。*
+*视频对应讲解区间：`00:39:50--00:40:42`。* 本页（课件第 19 页）画出 expert parallelism 的拓扑：不同 experts 被放置到不同设备上，token 按路由结果跨设备分发（dispatch）、各设备完成 expert 计算后再合并回原位置（combine）。这一页把 MoE 从"算法层的稀疏激活"落到"系统层的新并行维度"，也为第 8.1 节 all-to-all 通信量的定量估算提供了物理图景。
 
  路由又带来部分反馈：一个 token 只经过被选 expert，模型无法直接观察“如果送到其他 expert 会怎样”。这很像 contextual bandit，但主流系统通常不用完整 RL，而采用可微 router、top-k 选中路径、噪声和辅助损失等启发式方案。部分反馈是 MoE 训练一切困难的根源：router 的每一次选择都遮蔽了反事实，因此 router 的学习信号天然带有选择偏差，第 7 节的全部技术（噪声、辅助损失、bias）都是在不同程度上修补这个偏差。
 
@@ -686,9 +686,9 @@ Transformer 中大量参数和 FLOPs 位于 FFN。以标准的扩张四倍配置
 
 三者的差别在于**选择权的归属**。token-choice 把选择权交给数据侧：每个 token 独立决策，天然适合自回归在线推理（新 token 到达即可路由，无需等待 batch 成形），代价是负载完全由数据的统计性质决定，可能严重倾斜。expert-choice 把选择权交给参数侧：每个 expert 取固定数量 tokens，负载天然均衡，但一个 token 是否被处理取决于 expert 的决策，在逐 token 生成的推理场景下意味着未来的路由会反过来影响当前 token 是否被计算，与因果约束冲突。global assignment（如线性分配、最优传输）在数学上最干净——直接最小化全局代价并满足容量约束，但求解一个 batch 级匹配问题的成本与延迟都难以进入训练内循环。
 
-![Token-choice、expert-choice 与全局匹配](assets/routing-types.jpg)
+![slide-027：Token-choice、expert-choice 与全局匹配](assets/slides/slide-027.jpg)
 
-*图：三种 token-expert assignment 的对照。官方课件第 27 页；视频对应讲解区间：`00:48:15--00:49:00`。*
+*视频对应讲解区间：`00:48:15--00:49:00`。* 本页（课件第 27 页）并排画出三类 assignment：token-choice 中每个 token 独立选自己的 top-k experts；expert-choice 中每个 expert 反过来挑选固定数量的 tokens；global assignment 在整个 batch 上做一次匹配。三幅小图的箭头方向直观呈现了"选择权归属"的差异，与上方关于因果性、负载控制与在线约束的分析一一对应。
 
 经验上，简单 token-choice top-k 仍是主流。RL 路由和线性匹配在理论上更直接，却因高方差、复杂度与在线约束没有成为默认。工程史的教训是：**在训练内循环里，一个可微、无状态、逐 token 独立的路由函数几乎总是胜过更聪明但有状态的全局方案**。
 
@@ -719,20 +719,20 @@ h_t^l&=u_t^l+\sum_{i=1}^{N}g_{i,t}^l\operatorname{FFN}_i^l(u_t^l).
 \end{aligned}
 $$
 
-- `l`：层索引。
-- `t`：token 位置。
-- `i,j`：expert 索引。
-- `u_t^l`：进入第 `l` 个 MoE 层的 hidden state。
-- `e_i^l`：expert `i` 的 router embedding 或分类权重。
-- `s_{i,t}`：router 对 expert `i` 的 soft probability。
-- `TopK`：选出最大 `K` 个分数的操作。
-- `K`：每 token 选择的 routed experts 数。
-- `N`：routed experts 总数。
-- `g_{i,t}^l`：top-k mask 后的 gate。
-- `FFN_i^l`：第 `i` 个 expert FFN。
-- `h_t^l`：MoE residual 输出。
-- `Softmax_i`：沿 expert 维度的 softmax。
-- `⊤`：向量转置。
+- $l$：层索引。
+- $t$：token 位置。
+- $i,j$：expert 索引。
+- $u_t^l$：进入第 $l$ 个 MoE 层的 hidden state。
+- $e_i^l$：expert $i$ 的 router embedding 或分类权重。
+- $s_{i,t}$：router 对 expert $i$ 的 soft probability。
+- $\operator{TopK}$：选出最大 $K$ 个分数的操作。
+- $K$：每 token 选择的 routed experts 数。
+- $N$：routed experts 总数。
+- $g_{i,t}^l$：top-k mask 后的 gate。
+- $FFN_i^l$：第 $i$ 个 expert FFN。
+- $h_t^l$：MoE residual 输出。
+- $\operator{Softmax}_i$：沿 expert 维度的 softmax。
+- $\top$：向量转置。
 
 我们把概率计算再拆细一步。router 本质上是一个线性分类器：logit 为 $z_{i,t}=(u_t^l)^\top e_i^l$，softmax 给出
 
@@ -740,13 +740,13 @@ $$
 s_{i,t}=\frac{\exp(z_{i,t})}{\sum_{j=1}^{N}\exp(z_{j,t})},
 $$
 
-- $z_{i,t}$：token `t` 对 expert `i` 的路由 logit。
+- $z_{i,t}$：token $t$ 对 expert $i$ 的路由 logit。
 
 这里 softmax 沿 expert 维归一化，因此 $\sum_i s_{i,t}=1$——每个 token 把一单位的“概率质量”分配给全部 experts。top-k 操作再把这个连续分配**硬化**为稀疏集合：只有 $K$ 个 experts 收到非零 gate。注意在这一版定义里 gate 直接取 softmax 值、不做再归一化，所以 top-k 之后每行 gate 之和一般小于 1；被丢弃的概率质量相当于被“浪费”，输出幅度自然小于 dense FFN，这由后续训练补偿。
 
-#### 一个 `T=3, N=4, K=2` 的手算例子
+#### 一个 $T=3, N=4, K=2$ 的手算例子
 
-为了把“affinity → top-k → gate”具体化，令每个 token 的 hidden dimension 为 `d=2`。三行 token states 与四列 expert router vectors 相乘，得到每个 token 对每个 expert 的 logits；softmax 必须逐行、沿 expert 维归一化：
+为了把“affinity → top-k → gate”具体化，令每个 token 的 hidden dimension 为 $d=2$。三行 token states 与四列 expert router vectors 相乘，得到每个 token 对每个 expert 的 logits；softmax 必须逐行、沿 expert 维归一化：
 
 $$
 \begin{aligned}
@@ -768,23 +768,23 @@ G&=\operatorname{KeepTop2}(S)=
 \end{aligned}
 $$
 
-- `T=3`：batch/sequence 中参与路由的 token 数量，即 `U` 的行数。
-- `N=4`：routed experts 数量，即 `E`、`A`、`S`、`G` 的列数。
-- `K=2`：每个 token 保留的 expert 数量。
-- `d=2`：token hidden state 与 router vector 的维度。
-- `U`：token state 矩阵，形状 `[T,d]=[3,2]`。
-- `E`：由四个 expert router vectors 按列组成的矩阵，形状 `[d,N]=[2,4]`。
-- `A`：affinity/logit 矩阵 `UE`，形状 `[T,N]=[3,4]`。
-- `S`：对 `A` 每一行做 softmax 后的稠密 router probability，形状仍为 `[3,4]`。
-- `G`：每行只保留两个最大 probability 后的 sparse gate，形状仍为 `[3,4]`。
-- `Softmax_row`：固定一个 token，沿四个 experts 归一化。
-- `KeepTop2`：每行保留最大两项，其余置零。
-- `R`：实数域。
-- `≈`：三位小数近似。
+- $T=3$：batch/sequence 中参与路由的 token 数量，即 $U$ 的行数。
+- $N=4$：routed experts 数量，即 $E$、$A$、$S$、$G$ 的列数。
+- $K=2$：每个 token 保留的 expert 数量。
+- $d=2$：token hidden state 与 router vector 的维度。
+- $U$：token state 矩阵，形状 $[T,d]=[3,2]$。
+- $E$：由四个 expert router vectors 按列组成的矩阵，形状 $[d,N]=[2,4]$。
+- $A$：affinity/logit 矩阵 $UE$，形状 $[T,N]=[3,4]$。
+- $S$：对 $A$ 每一行做 softmax 后的稠密 router probability，形状仍为 $[3,4]$。
+- $G$：每行只保留两个最大 probability 后的 sparse gate，形状仍为 $[3,4]$。
+- $\operator{Softmax}_{\mathrm{row}}$：固定一个 token，沿四个 experts 归一化。
+- $\operator{KeepTop2}$：每行保留最大两项，其余置零。
+- $R$：实数域。
+- $\approx$：三位小数近似。
 
 验算第一行：logits 为 $[2,1,0,-1]$，指数后约为 $[7.389,2.718,1.000,0.368]$，总和 $11.475$，于是 $s_1=7.389/11.475\approx0.644$，$s_2=2.718/11.475\approx0.237$，$s_3\approx0.087$，$s_4\approx0.032$，与矩阵一致，四项之和为 1。KeepTop2 保留 $\{0.644,0.237\}$，该行 gate 之和降为 $0.881$。
 
-三行的选择集合分别是 `{expert 1, expert 2}`、`{expert 3, expert 2}`、`{expert 3, expert 2}`。按照课件这版“softmax 后 top-k”的定义，未再次归一化，所以每行 gate 之和可以小于 1。现在给六个实际被选中的 expert outputs 指定简单二维值，就能手算 residual combine：
+三行的选择集合分别是 $\{\text{expert 1},\text{expert 2}\}$、$\{\text{expert 3},\text{expert 2}\}$、$\{\text{expert 3},\text{expert 2}\}$。按照课件这版“softmax 后 top-k”的定义，未再次归一化，所以每行 gate 之和可以小于 1。现在给六个实际被选中的 expert outputs 指定简单二维值，就能手算 residual combine：
 
 $$
 \begin{aligned}
@@ -805,14 +805,14 @@ H&=U+\begin{bmatrix}
 \end{aligned}
 $$
 
-- `F_{t,i}`：expert `i` 对 token `t` 的二维 FFN 输出。
-- `H`：加上稀疏 expert 加权和后的 residual 输出，形状 `[T,d]=[3,2]`。
-- `U`：原 token states，作为 residual 分支逐行加回。
-- `t`：token 行索引。
-- `i`：expert 列索引。
-- 数字系数：来自 sparse gate `G` 中对应的非零项。
-- `R`：实数域。
-- `≈`：使用前三位 gate 近似计算。
+- $F_{t,i}$：expert $i$ 对 token $t$ 的二维 FFN 输出。
+- $H$：加上稀疏 expert 加权和后的 residual 输出，形状 $[T,d]=[3,2]$。
+- $U$：原 token states，作为 residual 分支逐行加回。
+- $t$：token 行索引。
+- $i$：expert 列索引。
+- 数字系数：来自 sparse gate $G$ 中对应的非零项。
+- $R$：实数域。
+- $\approx$：使用前三位 gate 近似计算。
 
 逐行验算：第一行 expert 加权和为 $0.644\times[1,0]+0.237\times[0,2]=[0.644,0.474]$，加回 $U_1=[1,0]$ 得 $[1.644,0.474]$；第二行为 $0.112\times[1,1]+0.831\times[-1,2]=[-0.719,1.774]$，加回 $[0,1]$ 得 $[-0.719,2.774]$；第三行为 $0.047\times[2,0]+0.936\times[0,1]=[0.094,0.936]$，加回 $[1,2]$ 得 $[1.094,2.936]$。
 
@@ -820,20 +820,20 @@ $$
 
 | 步骤 | 运算 | 输入形状 | 输出形状 |
 |---:|---|---|---|
-| 0 | 准备 token states / router vectors | `U:[3,2]`，`E:[2,4]` | — |
-| 1 | affinity `A=UE` | `[3,2]×[2,4]` | `A:[3,4]` |
-| 2 | row-wise softmax | `A:[3,4]` | `S:[3,4]` |
-| 3 | 每行 top-2 与置零 | `S:[3,4]` | indices `[3,2]`，`G:[3,4]` |
-| 4 | 执行被选 experts | 概念张量 `F:[3,4,2]` | 实际只计算 `T×K=6` 个二维输出 |
-| 5 | gate 加权并沿 expert 维求和 | `G:[3,4]`，`F:[3,4,2]` | expert sum `[3,2]` |
-| 6 | residual combine | `U:[3,2]` + expert sum `[3,2]` | `H:[3,2]` |
+| 0 | 准备 token states / router vectors | $U:[3,2]$，$E:[2,4]$ | — |
+| 1 | affinity $A=UE$ | $[3,2]\times [2,4]$ | $A:[3,4]$ |
+| 2 | row-wise softmax | $A:[3,4]$ | $S:[3,4]$ |
+| 3 | 每行 top-2 与置零 | $S:[3,4]$ | indices $[3,2]$，$G:[3,4]$ |
+| 4 | 执行被选 experts | 概念张量 $F:[3,4,2]$ | 实际只计算 $T\times K=6$ 个二维输出 |
+| 5 | gate 加权并沿 expert 维求和 | $G:[3,4]$，$F:[3,4,2]$ | expert sum $[3,2]$ |
+| 6 | residual combine | $U:[3,2]$ + expert sum $[3,2]$ | $H:[3,2]$ |
 
 > [!NOTE]
-> 这里为了匹配课件第 31 页，保留的是 softmax-before-top-k gate。若实现采用 top-k 后对 selected scores 重新归一化，选择集合不变，但上面六个非零权重和最终 `H` 会改变。两种约定在论文与代码中都真实存在，阅读实现时必须先确认使用的是哪一版。
+> 这里为了匹配课件第 31 页，保留的是 softmax-before-top-k gate。若实现采用 top-k 后对 selected scores 重新归一化，选择集合不变，但上面六个非零权重和最终 $H$ 会改变。两种约定在论文与代码中都真实存在，阅读实现时必须先确认使用的是哪一版。
 
-![标准 top-k router](assets/topk-routing.jpg)
+![slide-031：标准 top-k router 的公式页](assets/slides/slide-031.jpg)
 
-*图：router score、top-k mask 与加权 expert 输出。官方课件第 31 页；视频对应讲解区间：`00:52:57--00:54:20`。*
+*视频对应讲解区间：`00:52:57--00:54:20`。* 本页（课件第 31 页）是标准 token-choice top-k 路由的课件原页：router 先算 affinity、softmax 归一化，再 top-k mask 得到稀疏 gate，最后加权 expert 输出并加回 residual。上方 $s_{i,t}$、$g_{i,t}^l$、$h_t^l$ 三行公式与手算算例均按本页的"softmax 后 top-k、不再归一化"约定展开；下方关于 Mixtral/DeepSeek V3 再归一化变体的提醒，正是对本页约定适用范围的对照说明。
 
 不同模型的归一化顺序并不完全相同。DeepSeek V1–V2、Grok、Qwen 使用接近图中“softmax 后 top-k”的形式；Mixtral、DBRX、DeepSeek V3 常在 top-k 后对 selected scores 再归一化。不能把两种实现混成同一公式。
 
@@ -845,10 +845,10 @@ $$
 C=\text{capacity factor}\times\frac{T\cdot K}{N},
 $$
 
-- `C`：单个 expert 的容量（最多接收的 token 数）。
-- `T`：本批参与路由的 token 总数。
-- `K`：每 token 选择的 experts 数。
-- `N`：experts 总数。
+- $C$：单个 expert 的容量（最多接收的 token 数）。
+- $T$：本批参与路由的 token 总数。
+- $K$：每 token 选择的 experts 数。
+- $N$：experts 总数。
 - `capacity factor`：人为设定的富余系数，常取 1.0–2.0。
 
 推导很简单：整批 tokens 共产生 $T\cdot K$ 次“token→expert”指派；若路由完全均匀，每个 expert 恰好分到 $TK/N$ 次，这就是**理想均衡负载**。capacity factor 在理想值之上留出缓冲：取 1.25 意味着每个 expert 允许接收超出均衡值 25% 的 tokens，再超出的部分被丢弃（dropped）。容量把内存与计算变成可静态分配的量——kernel 可以为每个 expert 预分配 $C\times d$ 的缓冲区，避免动态形状。
@@ -890,9 +890,9 @@ def topk_route_with_capacity(U, E, K=2, capacity_factor=1.25):
 
 把一个大 expert 切成更多小 expert，可在相近 active parameter budget 下增加组合数；shared experts 则始终激活，用于承接跨 token 的共通知识。组合数的增长相当可观：从 $N$ 个 experts 中选 $K$ 个，可能的激活模式有 $\binom{N}{K}$ 种；把 expert 数从 8 增至 64、每 token 激活数从 2 增至 8，组合数从 $\binom{8}{2}=28$ 增至 $\binom{64}{8}\approx4.4\times10^9$，路由空间的表达能力提升了若干个数量级，而每 token 的计算量近似不变。
 
-![细粒度 routed experts 与 shared experts](assets/fine-grained-shared-experts.jpg)
+![slide-032：细粒度 routed experts 与 shared experts](assets/slides/slide-032.jpg)
 
-*图：常规 top-2、细粒度分割与 shared-expert isolation。官方课件第 32 页；视频对应讲解区间：`00:54:20--00:55:43`。*
+*视频对应讲解区间：`00:54:20--00:55:43`。* 本页（课件第 32 页）并排给出三种结构：常规 top-2 粗粒度 experts、把每个 expert 切小并增加选中数的细粒度方案、以及额外挂载始终激活的 shared expert。细粒度把每 token 的计算分摊到更多小专家上以扩大组合空间 $\binom{N}{K}$；shared expert 则把跨 token 共通知识从路由问题中剥离——两者正是下方 DeepSeek 与 OLMoE 消融实验对照的两个变量。
 
 DeepSeek 的 ablation 支持细粒度与 shared expert，但 OLMoE 的受控实验没有复现 shared expert 的稳定收益。这种冲突很重要：shared expert 是合理设计假设，不是已被普遍证明的定律。一个可能的调和解释是：shared expert 的收益取决于 routed experts 是否真的出现了冗余的共通知识——当 routed experts 数量足够多、路由足够分散时，共通知识会自发地分布到各 experts 中，专门的 shared expert 反而成为容量浪费。
 
@@ -941,9 +941,9 @@ hard top-k 对“未入选的集合变化”不可微：第 $K$ 名与第 $K+1$ 
 
 以 noisy top-k 为例，其思路是把确定性 logit $z_{i,t}$ 扰动为 $z_{i,t}+\sigma_{i,t}\epsilon$，其中 $\epsilon\sim\mathcal N(0,1)$、$\sigma_{i,t}$ 由可学习参数控制。噪声有两个作用：其一，让分数接近的 experts 都有机会进入 top-k，router 得以观察“换一个 expert 会怎样”，缓解部分反馈；其二，噪声尺度本身可学习，router 可以自主决定哪些边界需要探索、哪些决策已经确定。这与强化学习中的 $\epsilon$-greedy 探索同构，但完全可微。
 
-![Noisy top-k gating](assets/noisy-topk.jpg)
+![slide-038：Noisy top-k gating 的结构页](assets/slides/slide-038.jpg)
 
-*图：确定性 router logits、噪声尺度与 KeepTopK。官方课件第 38 页；视频对应讲解区间：`01:00:33--01:02:25`。*
+*视频对应讲解区间：`01:00:33--01:02:25`。* 本页（课件第 38 页）是 noisy top-k 的课件原页：确定性 router logits 先加上可学习尺度的高斯噪声，再经 KeepTopK 选出稀疏集合。噪声尺度的可学习性让 router 自主决定哪些边界需要探索——这与上方"分数接近的 experts 都有机会进入 top-k"的机制分析逐项对应，也是缓解部分反馈的最小改动方案。
 
 ![slide-039：随机扰动的另一种实现——input jitter](assets/slides/slide-039.jpg)
 
@@ -963,18 +963,18 @@ P_i&=\frac1T\sum_{x\in\mathcal B}p_i(x).
 \end{aligned}
 $$
 
-- `L_bal`：负载均衡辅助损失。
-- `α`：辅助损失权重。
-- `N`：experts 数量。
-- `i,j`：expert 索引。
-- `T`：batch 中 token 数。
-- `𝔅`：token batch。
-- `x`：一个 token 表示。
-- `p_i(x)`：token `x` 分给 expert `i` 的 router probability。
-- `argmax`：选择最大概率 expert。
-- `1{·}`：条件成立时为 1 的指示函数。
-- `f_i`：实际发送给 expert `i` 的 token 比例。
-- `P_i`：expert `i` 得到的平均 probability mass。
+- $L_{\mathrm{bal}}$：负载均衡辅助损失。
+- $\alpha$：辅助损失权重。
+- $N$：experts 数量。
+- $i,j$：expert 索引。
+- $T$：batch 中 token 数。
+- $\mathcal{B}$：token batch。
+- $x$：一个 token 表示。
+- $p_i(x)$：token $x$ 分给 expert $i$ 的 router probability。
+- $\operator{argmax}$：选择最大概率 expert。
+- $\mathbf{1}\{\cdot\}$：条件成立时为 1 的指示函数。
+- $f_i$：实际发送给 expert $i$ 的 token 比例。
+- $P_i$：expert $i$ 得到的平均 probability mass。
 
 为什么是这个形式？先看它的取值范围。$f$ 与 $P$ 都是 expert 维上的分布（各分量非负、和为 1），由柯西不等式，$\sum_i f_iP_i$ 在 $f=P$ 时达到下界的必要条件是两分布对齐；而当 $f=P=\text{均匀分布}$ 时，$\sum_i f_iP_i=N\cdot(1/N)(1/N)=1/N$，损失取最小值 $\alpha$。换言之，这个点积损失在“hard 负载均匀且 soft 质量均匀”时最小，任何一个 expert 过热都会推高损失。
 
@@ -984,11 +984,11 @@ $$
 \frac{\partial\mathcal L_{\mathrm{bal}}}{\partial P_i}=\alpha N f_i,
 $$
 
-即某 expert 的 `f_i` 越大，损失对其 probability mass 的正梯度越强；梯度下降会压低热门 expert 的后续分配概率。更细致地，$P_i=\frac1T\sum_x p_i(x)$，所以梯度进一步均摊到每个 token 的 router logit 上：热门 expert 的所有 token 分配概率都被一致下压，直到 $f_i$ 回落。这是一个**负反馈控制器**：hard load 是测量值，soft probability 是执行器，点积形式保证了控制信号与拥挤程度成正比。
+即某 expert 的 $f_i$ 越大，损失对其 probability mass 的正梯度越强；梯度下降会压低热门 expert 的后续分配概率。更细致地，$P_i=\frac1T\sum_x p_i(x)$，所以梯度进一步均摊到每个 token 的 router logit 上：热门 expert 的所有 token 分配概率都被一致下压，直到 $f_i$ 回落。这是一个**负反馈控制器**：hard load 是测量值，soft probability 是执行器，点积形式保证了控制信号与拥挤程度成正比。
 
-![Switch Transformer 的均衡损失](assets/switch-balancing-loss.jpg)
+![slide-040：Switch Transformer 的均衡损失](assets/slides/slide-040.jpg)
 
-*图：hard load `f_i` 与 soft mass `P_i` 的点积。官方课件第 40 页；视频对应讲解区间：`01:03:13--01:06:00`。*
+*视频对应讲解区间：`01:03:13--01:06:00`。* 本页（课件第 40 页）是 Switch balancing loss 的课件原页：把实际 hard load $f_i$（由 argmax 统计、不可微）与 soft probability mass $P_i$（可微）做点积，再乘以 $\alpha N$。上方的柯西不等式下界分析与负反馈梯度推导 $\partial\mathcal L_{\rm bal}/\partial P_i=\alpha N f_i$，正是对这一页公式为何能"按拥挤程度压低热门 expert 分配概率"的严格化。
 
 需要指出这个控制的代价：辅助损失与语言建模损失方向并不一致。强行均衡会让 router 把部分 tokens 送到次优 expert，$\alpha$ 因此是一个“为系统吞吐牺牲多少模型质量”的旋钮；$\alpha$ 过大时模型质量受损，过小时负载倾斜拖垮吞吐。这个张力直接催生了下一节的无辅助损失路线。
 
@@ -1007,28 +1007,28 @@ s_{i,t},&s_{i,t}+b_i\in\operatorname{TopK}(\{s_{j,t}+b_j\}_{j=1}^{N_r},K_r),\\
 \end{cases}
 $$
 
-- `g'_{i,t}`：token `t` 对 expert `i` 的稀疏 gate。
-- `s_{i,t}`：不含 bias 的 router score。
-- `b_i`：根据负载在线更新的 expert-selection bias。
-- `TopK`：选出最大分数集合的操作。
-- `N_r`：routed experts 数。
-- `K_r`：每 token 激活的 routed experts 数。shanch
-- `i,j`：expert 索引。
-- `t`：token 位置。
+- $g'_{i,t}$：token $t$ 对 expert $i$ 的稀疏 gate。
+- $s_{i,t}$：不含 bias 的 router score。
+- $b_i$：根据负载在线更新的 expert-selection bias。
+- $\operator{TopK}$：选出最大分数集合的操作。
+- $N_r$：routed experts 数。
+- $K_r$：每 token 激活的 routed experts 数。
+- $i,j$：expert 索引。
+- $t$：token 位置。
 
 bias 机制的精妙之处在于**解耦了“选择”与“权重”**：bias $b_i$ 只参与 top-k 集合的排名（过载的 expert 被减分、冷落 expert 被加分），而被选中的 expert 的 gate 仍然使用原始 score $s_{i,t}$。因此均衡压力不直接扭曲 expert 输出的加权系数——这与辅助损失把均衡目标混进主梯度形成对比。$b_i$ 通常按负载观测做符号化更新（overload 则减、underload 则加），是一个不依赖反向传播的在线控制器。
 
-![DeepSeek V3 的 per-expert bias](assets/deepseek-v3-expert-bias.jpg)
+![slide-042：DeepSeek V3 的 per-expert bias](assets/slides/slide-042.jpg)
 
-*图：bias 参与集合排名，但 selected gate 仍使用原始 score。官方课件第 42 页；视频对应讲解区间：`01:07:12--01:07:49`。*
+*视频对应讲解区间：`01:07:12--01:07:49`。* 本页（课件第 42 页）是 V3 无辅助损失均衡的课件原页：bias $b_i$ 只加在 top-k 集合排名的分数上，被选中后的 gate 仍使用原始 score $s_{i,t}$。这一"选择与权重解耦"的设计使均衡压力不扭曲 expert 输出的加权系数，与 Switch loss 把均衡目标混进主梯度形成对照；$b_i$ 按负载观测做符号化在线更新，不依赖反向传播。
 
 因此“aux-loss-free”应谨慎理解：它主要指减少传统全局辅助均衡损失的依赖；同页仍保留 complementary sequence-wise auxiliary protection。把 V3 的方案概括为“完全没有均衡机制”是对设计的误读。
 
 OLMoE 的实验则给出反例：移除 balancing loss 后训练没有立即崩溃，但 expert 使用会明显失衡。这说明均衡是否必要与 router、初始化、规模和训练配方有关。更一般地，均衡机制的必要性随 expert 数量、token 基数与训练时长变化——小模型短期训练可以容忍倾斜，大模型长训则会因倾斜累积而损失容量利用率。
 
-![移除负载均衡损失的 OLMoE 实验](assets/no-balancing-ablation.jpg)
+![slide-043：移除负载均衡损失的 OLMoE 实验](assets/slides/slide-043.jpg)
 
-*图：有/无 load balancing 时的 loss 与 expert load。官方课件第 43 页；视频对应讲解区间：`01:07:53--01:09:08`。*
+*视频对应讲解区间：`01:07:53--01:09:08`。* 本页（课件第 43 页）是 OLMoE 对均衡损失必要性的受控检验：移除 balancing loss 后训练 loss 并未立即崩溃，但 expert load 分布明显失衡。这为"均衡机制的必要性随规模与配方漂移"提供了反例证据——小模型短训可容忍倾斜，大模型长训则会因倾斜累积损失容量利用率，因此不能把 V3 的 aux-loss-free 读成"均衡机制可以被普遍取消"。
 
 ### 本章小结
 
@@ -1049,22 +1049,22 @@ $$
 2\,K\,d\,b\ \text{字节}.
 $$
 
-- `K`：每 token 激活的 experts 数。
-- `d`：hidden 维度。
-- `b`：每元素字节数（BF16 为 2）。
+- $K$：每 token 激活的 experts 数。
+- $d$：hidden 维度。
+- $b$：每元素字节数（BF16 为 2）。
 - 系数 2：dispatch 与 combine 两个方向。
 
 代入 DeepSeek V3 风格的数字（$K=8$，$d=7168$，BF16）：每 token 每层约 $2\times8\times7168\times2\approx229$ KB。一个含一百万 tokens 的训练 micro-batch 经过单个 MoE 层就产生约 229 GB 的 all-to-all 流量；模型有数十个 MoE 层、训练有数十万步，通信总量可想而知。对照硬件能力：机内 NVLink 约 900 GB/s，跨机 InfiniBand 每卡约 400 Gb/s（50 GB/s）——**一旦 expert 分布跨机，all-to-all 轻易成为整个训练流水线的瓶颈**，这就是 V2 把通信均衡写进路由目标（第 9.2 节）的直接动机。相比之下，同一 token 在 expert 内的计算只是 $O(Kd\cdot d_{ff})$ 次乘加，现代 GPU 完成这部分计算的时间常常短于等待数据到达的时间。
 
-![MoE 的多维并行与通信](assets/moe-system-parallelism.jpg)
+![slide-044：MoE 的多维并行与通信](assets/slides/slide-044.jpg)
 
-*图：expert parallelism 与其他并行方式的组合。官方课件第 44 页；视频对应讲解区间：`01:11:39--01:12:47`。*
+*视频对应讲解区间：`01:11:39--01:12:47`。* 本页（课件第 44 页）画出 expert parallelism 与 data、tensor、pipeline、sequence parallelism 叠加后的完整通信图：tokens 在 dispatch 阶段跨设备重排到 expert 所在设备，combine 阶段再收回原位置。这张图是上方每 token 每层 $2Kdb$ 字节通信量估算的系统背景——一旦 expert 分布跨机，all-to-all 就由最慢的互联边决定吞吐。
 
 token 按 expert 重排后，矩阵形状不再规则。MegaBlocks 一类实现把小矩阵乘合并成 block-sparse GEMM，减少 padding 与 kernel launch；更现代的 dropless 实现也避免因固定 capacity 直接丢 token。
 
-![Block-sparse expert matrix multiplication](assets/block-sparse-matmul.jpg)
+![slide-045：Block-sparse expert matrix multiplication](assets/slides/slide-045.jpg)
 
-*图：逐 expert 小 GEMM 与 block-sparse 合并。官方课件第 45 页；视频对应讲解区间：`01:12:47--01:13:55`。*
+*视频对应讲解区间：`01:12:47--01:13:55`。* 本页（课件第 45 页）是 MegaBlocks 式实现的示意图：路由后每个 expert 分到数量不等的 tokens，逐个 launch 小 GEMM 既浪费 kernel 启动开销又需要 padding；block-sparse GEMM 把变长分块拼成一次稀疏矩阵乘按块调度。这页是"理论 FLOPs 与实测吞吐之间隔着 kernel 工程"的典型案例——MoE 的算术节省只有在稀疏 kernel 成熟后才兑现为墙钟时间。
 
 LatentMoE / Nemotron-3 进一步在通信前下投影 activation、到 expert 侧再上投影，以额外计算换更少传输字节：若下投影比率为 $r$，上式中的通信量近似缩减为 $2Kdbr$。这与后面的 DeepSeek MLA 都使用“latent compression”思想，但一个压缩 expert communication，另一个压缩 KV cache，不应混为同一模块。
 
@@ -1078,9 +1078,9 @@ LatentMoE / Nemotron-3 进一步在通信前下投影 activation、到 expert �
 
 从概率的角度看得更清楚：在容量 $C$ 约束下，token $x$ 被 expert $i$ 接收的事件是“$x$ 选择了 $i$”且“$i$ 的排队长度未满”。后者依赖于同 batch 中其他所有选择 $i$ 的 tokens 的数量与顺序。即使 router 完全确定，batch 组成的随机抽样也会让同一 token 在不同 step 遭遇不同的丢弃命运。被丢弃的 token 在该层只有 residual 通路，等于随机跳过 FFN——这向训练注入了一种不受控的、与数据相关的结构噪声，其效果难以预测也难以复现。
 
-![Capacity-limited MoE 的 token dropping](assets/token-dropping.jpg)
+![slide-047：Capacity-limited MoE 的 token dropping](assets/slides/slide-047.jpg)
 
-*图：batch composition 可改变某个 token 是否被 expert 接收。官方课件第 47 页；视频对应讲解区间：`01:15:08--01:16:36`。*
+*视频对应讲解区间：`01:15:08--01:16:36`。* 本页（课件第 47 页）用两个不同的 batch 演示丢弃的随机性：同一个 token、同一个 router、同样的分数，仅因同 batch 其他 tokens 的路由选择不同，在一个 batch 中被 expert 接收、在另一个 batch 中溢出丢弃。这张图把"丢弃事件依赖 batch 组成"这一抽象论断落到具体例子，也是上方概率分析的直观插图。
 
 > [!WARNING]
 > 这种随机性针对带 capacity/drop 的实现；不能推广到所有 MoE。Dropless routing 和更好的 sparse kernels 正是为避免这一问题而发展。评价早期 MoE 论文中“训练不稳定”的结论时，需要先区分不稳定来自架构本身还是来自 dropping 机制。
@@ -1093,19 +1093,19 @@ $$
 L_z(x)=\frac1B\sum_{i=1}^{B}\left(\log\sum_{j=1}^{N}e^{x_j^{(i)}}\right)^2.
 $$
 
-- `L_z`：router z-loss。
-- `B`：batch 中 router 样本或 tokens 数。
-- `i`：token 索引。
-- `N`：experts 数量。
-- `j`：expert 索引。
-- `x_j^{(i)}`：第 `i` 个 token 对 expert `j` 的 router logit。
-- `log Σ exp`：softmax 的 log-normalizer。
+- $L_z$：router z-loss。
+- $B$：batch 中 router 样本或 tokens 数。
+- $i$：token 索引。
+- $N$：experts 数量。
+- $j$：expert 索引。
+- $x_j^{(i)}$：第 $i$ 个 token 对 expert $j$ 的 router logit。
+- $\log\sum\exp$：softmax 的 log-normalizer。
 
 为什么惩罚 log-normalizer？softmax 对 logits 的整体平移不变，$\log\sum_j e^{x_j}$ 度量的是 logits 的**绝对量级**而非相对排序。量级过大有两个害处：其一，$\exp$ 在低精度下容易溢出或丢失小项，加剧数值误差；其二，大 logit 意味着 softmax 接近 one-hot，被选 expert 的 gate 梯度趋近于零，router 学习停滞。z-loss 把量级向零拉回，等价于给 router 的输出尺度加了一个软约束。
 
-![Router FP32 与 z-loss](assets/router-zloss.jpg)
+![slide-048：Router FP32 与 z-loss](assets/slides/slide-048.jpg)
 
-*图：低精度 softmax 敏感性、router FP32 与 z-loss。官方课件第 48 页；视频对应讲解区间：`01:16:36--01:17:58`。*
+*视频对应讲解区间：`01:16:36--01:17:58`。* 本页（课件第 48 页）是 router 数值稳定方案的课件原页：左侧指出低精度 softmax 的舍入足以翻转 top-k 排序，因此 router logits/softmax 用 FP32 计算；右侧给出 z-loss $L_z=\frac1B\sum_i(\log\sum_j e^{x_j^{(i)}})^2$ 惩罚 log-normalizer 的绝对量级。上方的机制分析（平移不变性、one-hot 饱和、梯度消失）逐条对应这一页的两个组件。
 
 课程展示的 ablation 表明 z-loss 在部分设置改善稳定性，但它不是所有模型都必需的万能修复；精度、初始化、clipping 与 router 设计要一起看。DeepSeek V3 改用 sigmoid 打分后，每个 affinity 独立压缩到 $(0,1)$，量级失控的问题在结构上就大幅缓解——架构选择可以替代损失补丁，这是数值稳定性设计的一条普遍经验。
 
@@ -1123,9 +1123,9 @@ MoE 在小规模 fine-tuning 数据上可能收敛，因为预训练已学到 ro
 
 Upcycling 则把已有 dense checkpoint 的 FFN 复制或拆分成 experts，再继续训练 sparse MoE。它能复用已有表示，但通常仍需数百亿至数千亿 tokens 让 experts 分化，不能理解为零成本扩容。分化的必要性值得强调：刚复制出的 experts 参数完全相同，router 对它们的打分也相同，top-k 在并列分数下的选择近乎随机；只有在继续训练中，随机扰动与数据差异才会打破对称，让各 experts 走向专门化。对称打破需要时间和数据，这就是 upcycling 的隐性账单。
 
-![Dense checkpoint 到 MoE 的 upcycling](assets/upcycling.jpg)
+![slide-051：Dense checkpoint 到 MoE 的 upcycling](assets/slides/slide-051.jpg)
 
-*图：从 dense FFN 初始化多个 experts，以及额外预训练成本。官方课件第 51 页；视频对应讲解区间：`01:19:41--01:20:59`。*
+*视频对应讲解区间：`01:19:41--01:20:59`。* 本页（课件第 51 页）是 upcycling 的流程原图：dense FFN 被复制成多份 expert 副本，加挂 router 后继续训练；图中同时标出后续仍需的预训练量。课件借此强调对称打破问题——复制出的 experts 参数逐位相同，必须靠继续训练中的随机扰动与数据差异分化，这就是 upcycling 无法绕开的隐性账单。
 
 MiniCPM 与 Qwen 的案例说明 upcycling 可以成功；但如果目标从一开始就是超大 MoE，直接稀疏预训练往往更经济，因为无需先完整支付 dense pretraining。Upcycling 的合理定位是**复用沉没成本**：当手头已有一个训练良好的 dense 模型时，它是把既有资产升级到稀疏架构的捷径，而不是新项目的默认起点。
 
@@ -1154,21 +1154,21 @@ $$
 h'_t=u_t+\sum_{i=1}^{N_s}\operatorname{FFN}^{(s)}_i(u_t)+\sum_{i=1}^{N_r}g_{i,t}\operatorname{FFN}^{(r)}_i(u_t).
 $$
 
-- `t`：token 位置。
-- `u_t`：进入 MoE FFN 的 hidden state。
-- `h'_t`：加入 shared/routed expert 输出后的 hidden state。
-- `N_s`：shared experts 数量。
-- `N_r`：routed experts 数量。
-- `i`：expert 索引。
-- `FFN_i^(s)`：始终启用的 shared expert。
-- `FFN_i^(r)`：由 router 选择的 routed expert。
-- `g_{i,t}`：top-k 后的 expert gate。
+- $t$：token 位置。
+- $u_t$：进入 MoE FFN 的 hidden state。
+- $h'_t$：加入 shared/routed expert 输出后的 hidden state。
+- $N_s$：shared experts 数量。
+- $N_r$：routed experts 数量。
+- $i$：expert 索引。
+- $FFN_i^{(s)}$：始终启用的 shared expert。
+- $FFN_i^{(r)}$：由 router 选择的 routed expert。
+- $g_{i,t}$：top-k 后的 expert gate。
 
 这个公式的结构本身就是一份设计宣言：第一项是 residual 主干，第二项是无条件激活的共通知识库，第三项是条件激活的专门化容量。三层分工让“所有 tokens 都需要的能力”与“少数 tokens 才需要的能力”在参数层面物理隔离，router 只需负责后者的选择问题。
 
-![DeepSeek MoE V1](assets/deepseek-moe-v1.jpg)
+![slide-054：DeepSeek MoE V1](assets/slides/slide-054.jpg)
 
-*图：V1 的 shared/routed experts、标准 top-k 与均衡目标。官方课件第 54 页；视频对应讲解区间：`01:22:33--01:22:55`。*
+*视频对应讲解区间：`01:22:33--01:22:55`。* 本页（课件第 54 页）是 V1 的课件原页：16B total / 2.8B active、2 个 shared experts、细粒度 routed experts、标准 softmax top-k，配 expert-level 与 device-level 双重辅助均衡。上方 residual + shared + routed 三项结构的公式即出自本页，V1 因此可被视为"现代 MoE 原型"的最小完整实例。
 
 ### 9.2 V2：把通信写进路由目标
 
@@ -1176,9 +1176,9 @@ V2 的课程配置为 236B total / 21B active。它引入 top-M device routing�
 
 top-M device routing 的效果可以用第 8.1 节的通信模型量化：若 experts 分布在 $G$ 台设备上，无约束 top-k 路由下每个 token 最坏要与 $K$ 台不同设备通信；先选 $M$ 台设备再在其中选 $K$ 个 experts，则每 token 的通信对端数被压到 $\min(M,K)$ 以内，跨机流量与连接数同步下降。communication balancing 再进一步：不只均衡每台设备接收的 token 数（流入），还均衡每台设备发出的 token 数（流出），因为 all-to-all 的完成时间由最慢的一条边决定。
 
-![DeepSeek MoE V2](assets/deepseek-moe-v2.jpg)
+![slide-055：DeepSeek MoE V2](assets/slides/slide-055.jpg)
 
-*图：V2 的 top-M device routing 与 communication balancing。官方课件第 55 页；视频对应讲解区间：`01:22:55--01:23:25`。*
+*视频对应讲解区间：`01:22:55--01:23:25`。* 本页（课件第 55 页）是 V2 的课件原页：236B total / 21B active，路由先在设备粒度做 top-$M$ 筛选、再在选中设备内做 expert top-$K$，通信均衡同时约束流入与流出。上方用每 token 通信对端数从 $K$ 压到 $\min(M,K)$ 的量化分析，正是对本页机制的直接展开，也是"respect your systems"原则的第一个完整案例。
 
 这里的关键原则是“respect your systems”：架构目标函数不仅优化语言建模 loss，也要反映设备拓扑和通信代价。V2 标志着 MoE 设计从“统计模型 + 事后系统工程”转向“统计目标与系统约束联合优化”。
 
@@ -1194,23 +1194,23 @@ g_{i,t}&=\frac{g'_{i,t}}{\sum_{j=1}^{N_r}g'_{j,t}}.
 \end{aligned}
 $$
 
-- `t`：token 位置。
-- `i,j`：expert 索引。
-- `u_t`：token hidden state。
-- `e_i`：expert `i` 的 router vector。
-- `s_{i,t}`：sigmoid affinity，尚未跨 experts 归一化。
-- `Sigmoid`：独立压缩每个 affinity 的函数。
-- `TopK`：选择最大 `K_r` 个分数的操作。
-- `N_r`：routed experts 总数。
-- `K_r`：激活 routed experts 数量。
-- `g'_{i,t}`：top-k mask 后的 score。
-- `g_{i,t}`：只在 selected experts 间归一化的权重。
+- $t$：token 位置。
+- $i,j$：expert 索引。
+- $u_t$：token hidden state。
+- $e_i$：expert $i$ 的 router vector。
+- $s_{i,t}$：sigmoid affinity，尚未跨 experts 归一化。
+- $\operator{Sigmoid}$：独立压缩每个 affinity 的函数。
+- $\operator{TopK}$：选择最大 $K_r$ 个分数的操作。
+- $N_r$：routed experts 总数。
+- $K_r$：激活 routed experts 数量。
+- $g'_{i,t}$：top-k mask 后的 score。
+- $g_{i,t}$：只在 selected experts 间归一化的权重。
 
 三步各自承担独立的职责，这正是“解耦”的含义。第一步，sigmoid 让每个 expert 的 affinity 独立落在 $(0,1)$，不再像 softmax 那样互相竞争一单位概率质量——expert 数增加不会稀释已有 experts 的分数。第二步，top-k 只负责**选集合**，此阶段可以引入第 7.3 节的 bias 做负载控制而不污染权重。第三步，归一化只在被选集合内部进行，保证每 token 的 expert 权重之和恰为 1，输出幅度与 dense FFN 可比。与 6.2 节“softmax 后 top-k 不再归一化”的老式写法相比，V3 版把选择压力、权重尺度、均衡控制分别交给了三个可独立调节的环节。
 
-![DeepSeek MoE V3](assets/deepseek-moe-v3.jpg)
+![slide-056：DeepSeek MoE V3](assets/slides/slide-056.jpg)
 
-*图：V3 的 sigmoid score、top-k、selected normalization 与 seq-wise protection。官方课件第 56 页；视频对应讲解区间：`01:23:25--01:23:50`。*
+*视频对应讲解区间：`01:23:25--01:23:50`。* 本页（课件第 56 页）是 V3 的课件原页：sigmoid 独立打分、top-k 选集合、只在选中集合内归一化，配在线 expert bias 与 sequence-wise 辅助保护。三步解耦的公式与本页逐项对应；也请注意本页正是下方 WARNING 所指"标题写 V3、参数行误写 V2"的冲突页，引用时以官方技术报告为准。
 
 > [!WARNING]
 > 官方课件第 56 页标题为 V3，但参数行误写 V2；expert 总数又与课程前面的配置表不一致。这里保留讲者明确给出的 total/active/active-expert 口径，不静默补写有冲突的 expert 总数。引用 V3 路由配置时应以 DeepSeek 官方技术报告为准。
@@ -1235,7 +1235,7 @@ $$
 
 ### 10.1 MLA：缓存低维 latent，而不是完整 KV
 
-Multi-head Latent Attention（MLA）先把 hidden state 压到低维 latent，再从 latent 恢复 content Q/K/V。推理时主要缓存 `c_t^{KV}`，因此 KV cache 显著缩小：
+Multi-head Latent Attention（MLA）先把 hidden state 压到低维 latent，再从 latent 恢复 content Q/K/V。推理时主要缓存 $c_t^{KV}$，因此 KV cache 显著缩小：
 
 $$
 \begin{aligned}
@@ -1244,24 +1244,24 @@ c_t^Q&=W^{DQ}h_t,&q_t^C&=W^{UQ}c_t^Q.
 \end{aligned}
 $$
 
-- `t`：token 位置。
-- `h_t`：输入 hidden state。
-- `c_t^(KV)`：低维 KV latent，推理时缓存。
-- `c_t^Q`：低维 query latent，主要降低训练内存。
-- `W^(DKV)`：KV down-projection。
-- `W^(DQ)`：query down-projection。
-- `W^(UK)`：key up-projection。
-- `W^(UV)`：value up-projection。
-- `W^(UQ)`：query up-projection。
-- `k_t^C`：恢复出的 content key。
-- `v_t^C`：恢复出的 content value。
-- `q_t^C`：恢复出的 content query。
+- $t$：token 位置。
+- $h_t$：输入 hidden state。
+- $c_t^{(KV)}$：低维 KV latent，推理时缓存。
+- $c_t^Q$：低维 query latent，主要降低训练内存。
+- $W^{(DKV)}$：KV down-projection。
+- $W^{(DQ)}$：query down-projection。
+- $W^{(UK)}$：key up-projection。
+- $W^{(UV)}$：value up-projection。
+- $W^{(UQ)}$：query up-projection。
+- $k_t^C$：恢复出的 content key。
+- $v_t^C$：恢复出的 content value。
+- $q_t^C$：恢复出的 content query。
 
 理解 MLA 的关键是认清**信息瓶颈的位置**：所有 heads 的 K 与 V 都从同一个低维向量 $c_t^{KV}$ 恢复，因此这个 latent 是历史 token 对 attention 可见信息的全部载体。推理时只需缓存它（外加少量 RoPE 维度，见下文），而不必缓存恢复后的高维 K/V——up-projection 可以在读取时实时重算，用计算换显存。
 
-![MLA 的 latent KV cache 架构](assets/mla-architecture.jpg)
+![slide-057：MLA 的 latent KV cache 架构](assets/slides/slide-057.jpg)
 
-*图：MLA 从低维 latent 生成 Q/K/V，并标出推理时缓存位置。官方课件第 57 页；视频对应讲解区间：`01:23:50--01:24:42`。*
+*视频对应讲解区间：`01:23:50--01:24:42`。* 本页（课件第 57 页）是 MLA 架构的课件原页：hidden state 先经 down-projection 压为低维 $c_t^{KV}$，再分别 up-project 出各 heads 的 K 与 V；图中标出推理时真正需要缓存的只有 latent（外加少量 RoPE 维度）。上方"信息瓶颈的位置"分析与 MHA/GQA/MLA 字节数对照表，都是对本页的定量展开。
 
 #### 缓存收益的定量推导：MHA / GQA / MLA 每 token 字节数对比
 
@@ -1298,20 +1298,20 @@ $$
 \end{aligned}
 $$
 
-- `Q,K`：未压缩表述下的 query 与 key。
-- `h`：query 侧 hidden state。
-- `W^Q`：query projection。
-- `W^(UK)`：latent key up-projection。
-- `c_t^(KV)`：位置 `t` 的 KV latent。
-- `R_q`：query 位置对应的 RoPE 旋转矩阵。
-- `R_k`：key 位置对应的 RoPE 旋转矩阵。
-- `⟨·,·⟩`：attention 内积。
+- $Q,K$：未压缩表述下的 query 与 key。
+- $h$：query 侧 hidden state。
+- $W^Q$：query projection。
+- $W^{(UK)}$：latent key up-projection。
+- $c_t^{(KV)}$：位置 $t$ 的 KV latent。
+- $R_q$：query 位置对应的 RoPE 旋转矩阵。
+- $R_k$：key 位置对应的 RoPE 旋转矩阵。
+- $\langle \cdot ,\cdot \rangle $：attention 内积。
 
 两行对比揭示了问题所在。无 RoPE 时，$W^QW^{UK}$ 可以离线合并成一个矩阵，推理时直接用 latent 与合并后的 query 侧矩阵做内积，up-projection 完全省去。有 RoPE 时，旋转矩阵 $R_qR_k$ 取决于 query 与 key 的**相对位置**，每一对 $(q,k)$ 对应不同的中间矩阵 $W^QR_qR_kW^{UK}$，无法离线合并——若逐对计算则退化为 $O(n)$ 次矩阵乘，缓存优化的收益被计算开销吃光。
 
-![MLA 的矩阵吸收与 RoPE 冲突](assets/mla-derivation.jpg)
+![slide-058：MLA 的矩阵吸收与 RoPE 冲突](assets/slides/slide-058.jpg)
 
-*图：无 RoPE 时可合并 projection，加入位置旋转后不再成立。官方课件第 58 页；视频对应讲解区间：`01:24:42--01:25:05`。*
+*视频对应讲解区间：`01:24:42--01:25:05`。* 本页（课件第 58 页）是矩阵吸收推导的课件原页：第一行展示无位置编码时 $W^QW^{UK}$ 可离线合并，第二行展示 RoPE 旋转矩阵 $R_q,R_k$ 卡在中间后合并失效。上方"每一对 $(q,k)$ 对应不同中间矩阵"的分析逐字对应这两行公式，也解释了为什么最终方案要保留 64 维显式 RoPE key 通道。
 
 课件给出的直觉性解法是保留少量 non-latent key dimensions 专门承载 RoPE，content 部分继续使用 latent cache。这就是上表缓存字节数中“+64 维”的来源：位置信息走显式小通道，内容信息走低秩大通道，两者拼接构成完整 key。讲者没有展开完整多头实现，因此这里也不超出课程范围补全论文细节；对完整设计（包括 query 侧压缩与吸收实现）感兴趣的读者应查阅 DeepSeek-V2 技术报告。
 
@@ -1327,19 +1327,19 @@ p_{i+k+1}^k=\operatorname{OutHead}(h_i^{\prime k}).
 \end{aligned}
 $$
 
-- `i`：序列位置。
-- `k`：MTP module 或预测深度索引。
-- `t_{i+k}`：偏移到未来位置的 token。
-- `Emb`：token embedding 函数。
-- `h_i^(k-1)`：上一预测深度的 hidden representation。
-- `M_k`：拼接两个 RMSNorm 表示后的 projection module。
-- `RMSNorm`：均方根归一化。
-- `T`：序列长度。
-- `1:T-k`：从位置 1 到 `T-k` 的序列切片。
-- `TRM_k`：第 `k` 个轻量 Transformer block。
-- `h'`：经轻量 Transformer 更新后的表示。
-- `OutHead`：输出 token distribution 的 head。
-- `p_(i+k+1)^k`：第 `k` 个模块对更远 token 的预测分布。
+- $i$：序列位置。
+- $k$：MTP module 或预测深度索引。
+- $t_{i+k}$：偏移到未来位置的 token。
+- $\operator{Emb}$：token embedding 函数。
+- $h_i^{(k-1)}$：上一预测深度的 hidden representation。
+- $M_k$：拼接两个 RMSNorm 表示后的 projection module。
+- $\operator{RMSNorm}$：均方根归一化。
+- $T$：序列长度。
+- $1:T-k$：从位置 1 到 $T-k$ 的序列切片。
+- $\operator{TRM}_k$：第 $k$ 个轻量 Transformer block。
+- $h'$：经轻量 Transformer 更新后的表示。
+- $\operator{OutHead}$：输出 token distribution 的 head。
+- $p_{i+k+1}^{(k)}$：第 $k$ 个模块对更远 token 的预测分布。
 - 分号 `;`：向量拼接。
 
 注意模块之间的链式结构：第 $k$ 个模块接收第 $k-1$ 个模块的表示与**已知的未来 token** $t_{i+k}$ 的 embedding，预测 $t_{i+k+1}$。训练时未来 token 来自 ground truth（teacher forcing），因此整个链条可以并行计算；这与推理时的逐 token 猜测不同，训练成本只增加少量轻量模块的前反向开销。
@@ -1354,9 +1354,9 @@ MTP 的训练目标可写成各深度损失的加权和 $\mathcal L=\sum_k\lambd
 
 代价与边界同样需要说清：每个额外深度都增加训练 FLOPs 与内存（虽然模块轻量）；深度过大时远期预测本身接近不可学（语言的条件熵随视野增长），边际收益递减。DeepSeek V3 因此只用**一个**额外预测深度，在信号增益与开销之间取保守折中。
 
-![DeepSeek 的 Multi-Token Prediction](assets/multi-token-prediction.jpg)
+![slide-059：DeepSeek 的 Multi-Token Prediction](assets/slides/slide-059.jpg)
 
-*图：DeepSeek MTP、EAGLE 对照与多步预测模块。官方课件第 59 页；视频对应讲解区间：`01:25:05--01:25:41`。*
+*视频对应讲解区间：`01:25:05--01:25:41`。* 本页（课件第 59 页）是 MTP 的课件原页：左侧画出链式模块结构——第 $k$ 个模块拼接上一深度表示与已知未来 token 的 embedding，经轻量 Transformer block 预测 $t_{i+k+1}$；右侧与 EAGLE 类外置草稿方案对照。上方的梯度信号三重分析与"只用一个额外深度"的边界讨论，分别对应本页的结构图与课件旁注。
 
 MTP 有两种动机：额外未来目标迫使共享表示捕捉更长程的可预测结构；推理时多个候选又可作为内置 speculative decoding 草稿。课件的“only do MTP with one token ahead”更可能指只使用一个额外预测深度，不能据此断言它退化成普通 next-token prediction。与 EAGLE 等外置草稿模型方案相比，MTP 的草稿能力与主模型共享训练与表示，省去了单独训练和维护草稿模型的成本，但草稿的预测视野也受限于训练时使用的深度。
 
@@ -1376,9 +1376,9 @@ MTP 有两种动机：额外未来目标迫使共享表示捕捉更长程的可�
 2. 离散 top-k routing 很难优化，但简单启发式方法已经足够有效；
 3. 现有大量经验结果表明 MoE 具有成本效益，短期内不会退出主流架构。
 
-![课程的 MoE 总结页](assets/moe-summary.jpg)
+![slide-060：课程的 MoE 总结页](assets/slides/slide-060.jpg)
 
-*图：稀疏激活、top-k 路由与经验有效性三条结论。官方课件第 60 页；视频对应讲解区间：`01:25:43--01:26:14`。*
+*视频对应讲解区间：`01:25:43--01:26:14`。* 本页（课件第 60 页）是全讲收束页，与上方讲者的三条口头结论一一对应：稀疏性让参数容量与每 token 计算解耦；离散 top-k 路由难优化但启发式已够用；大量经验证据表明 MoE 具有成本效益。这三条同时也是本讲前半场的镜像结论——attention alternatives 同样是用选择器与状态换取"容量与计算的解耦"。
 
 ### 统一视角：对历史与参数做条件访问
 

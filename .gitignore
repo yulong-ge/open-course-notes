@@ -5,3 +5,4 @@ site/
 __pycache__/
 *.py[cod]
 
+.cs336-rewrite/
