@@ -69,6 +69,13 @@ nav:
       - 许可与权利: licensing.md
 
 plugins:
+  - glightbox:
+      touchNavigation: true
+      loop: false
+      effect: zoom
+      zoomable: true
+      draggable: true
+      auto_caption: false
   - search:
       lang:
         - zh

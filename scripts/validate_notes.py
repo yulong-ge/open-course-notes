@@ -23,6 +23,7 @@ BANNED_RE = re.compile(
     r"\[cite\]|TODO|FIXME|TBD|PLACEHOLDER|\.work/|/Users/|"
     r"\[INAUDIBLE\]|\]\(file://|\]\(source/|`source/"
 )
+INVALID_KATEX_RE = re.compile(r"\\operator\s*\{")
 
 
 def validate_site_config() -> list[str]:
@@ -35,6 +36,8 @@ def validate_site_config() -> list[str]:
     required_config = {
         "pymdownx.arithmatex": "Arithmatex Markdown extension",
         "generic: true": "generic Arithmatex output",
+        "glightbox:": "image lightbox plugin",
+        "zoomable: true": "zoomable lightbox images",
         "hooks/github_callouts.py": "GitHub-style callout hook",
         "javascripts/katex.js": "local KaTeX bootstrap",
         "katex.min.js": "KaTeX runtime",
@@ -69,7 +72,7 @@ def lesson_pages() -> list[Path]:
 
 
 def prose_lines(lines: list[str]) -> list[str]:
-    """Return Markdown lines outside fenced code blocks."""
+    """Return Markdown prose while preserving source line numbers."""
     result: list[str] = []
     fence: str | None = None
     for line in lines:
@@ -80,9 +83,12 @@ def prose_lines(lines: list[str]) -> list[str]:
                 fence = marker
             elif fence == marker:
                 fence = None
+            result.append("")
             continue
         if fence is None:
             result.append(line)
+        else:
+            result.append("")
     return result
 
 
@@ -114,6 +120,13 @@ def validate_page(page: Path) -> list[str]:
     if banned:
         line_number = text.count("\n", 0, banned.start()) + 1
         errors.append(f"line {line_number}: forbidden publish-time marker {banned.group()!r}")
+
+    for index, line in enumerate(prose, start=1):
+        if INVALID_KATEX_RE.search(line):
+            errors.append(
+                f"line {index}: invalid KaTeX command '\\operator{{...}}'; "
+                "use '\\operatorname{...}'"
+            )
 
     teaching_figures = 0
     for index, line in enumerate(lines):

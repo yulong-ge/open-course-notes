@@ -73,7 +73,7 @@ $$
 - $a_{2,:}$：沿 key 位置维归一化后的权重，三项之和为 1。
 - $v_1,v_2,v_3$：为便于手算而设为标量的三个 values。
 - $y_2$：query 2 的加权输出。
-- $\operator{softmax}$：对同一个 query 的全部允许 key logits 做指数归一化。
+- $\operatorname{softmax}$：对同一个 query 的全部允许 key logits 做指数归一化。
 - $\infty$：无穷大；$\exp(-\infty)=0$。
 - $\approx$：数值近似。
 
@@ -198,9 +198,9 @@ $$
 - $K$：所有位置的 key 矩阵。
 - $V$：所有位置的 value 矩阵。
 - $\rho$：施加在 attention logits 或 weights 上的变换。
-- $\operator{Id}$：恒等映射。
+- $\operatorname{Id}$：恒等映射。
 - $T$：矩阵转置。
-- $\operator{Attn}$：attention 运算。
+- $\operatorname{Attn}$：attention 运算。
 
 我们把两种结合顺序的乘加次数逐项算出。左结合（标准顺序）：先算 $QK^\top$，这是 $n^2d_k$ 次乘加；再用结果左乘 $V$，这是 $n^2d_v$ 次乘加，合计
 
@@ -534,13 +534,13 @@ $$
 - $w^I_{t,j}$：第 $j$ 个 indexer head 的权重。
 - $q^I_{t,j}$：第 $j$ 个 indexer query。
 - $k^I_s$：历史位置 $s$ 的 indexer key。
-- $\operator{ReLU}$：逐元素非线性。
+- $\operatorname{ReLU}$：逐元素非线性。
 - $h_t$：当前 token hidden state。
 - $c_s$：最终 attention 使用的历史 key-value entry。
-- $\operator{TopK}$：选出最大分数集合的操作。
+- $\operatorname{TopK}$：选出最大分数集合的操作。
 - $k$：保留的历史位置数。
 - $u_t$：稀疏 attention 输出。
-- $\operator{Attn}$：对选中条目执行的精细 attention。
+- $\operatorname{Attn}$：对选中条目执行的精细 attention。
 - $T$：向量转置。
 
 注意 indexer 打分与精细 attention 使用**两套不同的表示**：$q^I,k^I$ 是低维、低精度的“检索表示”，只负责回答“这个位置值不值得细看”；$c_s$ 是完整的 KV entry，只在被选中后才参与昂贵的高维 attention。这种“粗筛 + 精读”的两段式结构与信息检索系统中的 recall-rerank 流水线同构。
@@ -725,13 +725,13 @@ $$
 - $u_t^l$：进入第 $l$ 个 MoE 层的 hidden state。
 - $e_i^l$：expert $i$ 的 router embedding 或分类权重。
 - $s_{i,t}$：router 对 expert $i$ 的 soft probability。
-- $\operator{TopK}$：选出最大 $K$ 个分数的操作。
+- $\operatorname{TopK}$：选出最大 $K$ 个分数的操作。
 - $K$：每 token 选择的 routed experts 数。
 - $N$：routed experts 总数。
 - $g_{i,t}^l$：top-k mask 后的 gate。
 - $FFN_i^l$：第 $i$ 个 expert FFN。
 - $h_t^l$：MoE residual 输出。
-- $\operator{Softmax}_i$：沿 expert 维度的 softmax。
+- $\operatorname{Softmax}_i$：沿 expert 维度的 softmax。
 - $\top$：向量转置。
 
 我们把概率计算再拆细一步。router 本质上是一个线性分类器：logit 为 $z_{i,t}=(u_t^l)^\top e_i^l$，softmax 给出
@@ -777,8 +777,8 @@ $$
 - $A$：affinity/logit 矩阵 $UE$，形状 $[T,N]=[3,4]$。
 - $S$：对 $A$ 每一行做 softmax 后的稠密 router probability，形状仍为 $[3,4]$。
 - $G$：每行只保留两个最大 probability 后的 sparse gate，形状仍为 $[3,4]$。
-- $\operator{Softmax}_{\mathrm{row}}$：固定一个 token，沿四个 experts 归一化。
-- $\operator{KeepTop2}$：每行保留最大两项，其余置零。
+- $\operatorname{Softmax}_{\mathrm{row}}$：固定一个 token，沿四个 experts 归一化。
+- $\operatorname{KeepTop2}$：每行保留最大两项，其余置零。
 - $R$：实数域。
 - $\approx$：三位小数近似。
 
@@ -971,7 +971,7 @@ $$
 - $\mathcal{B}$：token batch。
 - $x$：一个 token 表示。
 - $p_i(x)$：token $x$ 分给 expert $i$ 的 router probability。
-- $\operator{argmax}$：选择最大概率 expert。
+- $\operatorname{argmax}$：选择最大概率 expert。
 - $\mathbf{1}\{\cdot\}$：条件成立时为 1 的指示函数。
 - $f_i$：实际发送给 expert $i$ 的 token 比例。
 - $P_i$：expert $i$ 得到的平均 probability mass。
@@ -1010,7 +1010,7 @@ $$
 - $g'_{i,t}$：token $t$ 对 expert $i$ 的稀疏 gate。
 - $s_{i,t}$：不含 bias 的 router score。
 - $b_i$：根据负载在线更新的 expert-selection bias。
-- $\operator{TopK}$：选出最大分数集合的操作。
+- $\operatorname{TopK}$：选出最大分数集合的操作。
 - $N_r$：routed experts 数。
 - $K_r$：每 token 激活的 routed experts 数。
 - $i,j$：expert 索引。
@@ -1199,8 +1199,8 @@ $$
 - $u_t$：token hidden state。
 - $e_i$：expert $i$ 的 router vector。
 - $s_{i,t}$：sigmoid affinity，尚未跨 experts 归一化。
-- $\operator{Sigmoid}$：独立压缩每个 affinity 的函数。
-- $\operator{TopK}$：选择最大 $K_r$ 个分数的操作。
+- $\operatorname{Sigmoid}$：独立压缩每个 affinity 的函数。
+- $\operatorname{TopK}$：选择最大 $K_r$ 个分数的操作。
 - $N_r$：routed experts 总数。
 - $K_r$：激活 routed experts 数量。
 - $g'_{i,t}$：top-k mask 后的 score。
@@ -1330,15 +1330,15 @@ $$
 - $i$：序列位置。
 - $k$：MTP module 或预测深度索引。
 - $t_{i+k}$：偏移到未来位置的 token。
-- $\operator{Emb}$：token embedding 函数。
+- $\operatorname{Emb}$：token embedding 函数。
 - $h_i^{(k-1)}$：上一预测深度的 hidden representation。
 - $M_k$：拼接两个 RMSNorm 表示后的 projection module。
-- $\operator{RMSNorm}$：均方根归一化。
+- $\operatorname{RMSNorm}$：均方根归一化。
 - $T$：序列长度。
 - $1:T-k$：从位置 1 到 $T-k$ 的序列切片。
-- $\operator{TRM}_k$：第 $k$ 个轻量 Transformer block。
+- $\operatorname{TRM}_k$：第 $k$ 个轻量 Transformer block。
 - $h'$：经轻量 Transformer 更新后的表示。
-- $\operator{OutHead}$：输出 token distribution 的 head。
+- $\operatorname{OutHead}$：输出 token distribution 的 head。
 - $p_{i+k+1}^{(k)}$：第 $k$ 个模块对更远 token 的预测分布。
 - 分号 `;`：向量拼接。
 

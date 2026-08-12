@@ -4,9 +4,17 @@ version = "0.1.0"
 description = "MkDocs site for curated Chinese open course notes"
 requires-python = ">=3.12"
 dependencies = [
+  "mkdocs-glightbox>=0.5,<0.6",
   "mkdocs-material>=9.6,<10",
 ]
 
 [tool.uv]
 package = false
 
+[tool.uv.sources]
+mkdocs-glightbox = { index = "pypi" }
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
+explicit = true
