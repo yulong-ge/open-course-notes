@@ -10,11 +10,3 @@ dependencies = [
 
 [tool.uv]
 package = false
-
-[tool.uv.sources]
-mkdocs-glightbox = { index = "pypi" }
-
-[[tool.uv.index]]
-name = "pypi"
-url = "https://pypi.org/simple"
-explicit = true
